@@ -2,13 +2,16 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { MapPin, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
-import type { Address, Client, ClientDetail, Page } from '../types';
+import { isPartnerClient, type Address, type Client, type ClientDetail, type Page } from '../types';
 import { Empty, ErrorBox, Field, Loading, Modal, Pager, StatusBadge, Tabs } from '../components/ui';
 import { PhoneInput } from '../components/fields';
 import LocationPicker, { type LatLng } from '../components/LocationPicker';
 import { formatPhone } from '../format';
 import { CommentBadge, default as Comments, useCommentCounts } from '../components/Comments';
 import OrderModal from './OrderModal';
+import ClientPartnerPanel, { Switch } from './ClientPartnerPanel';
+
+const SaygakBadge = () => <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">Saygak</span>;
 
 export default function Clients() {
   const [rows, setRows] = useState<Client[]>([]);
@@ -53,7 +56,7 @@ export default function Clients() {
             {rows.map((c) => (
               <li key={c.id} onClick={() => setSelected(c.id)} className="cursor-pointer px-4 py-3.5 transition-colors active:bg-gray-50">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-semibold">{c.name}<CommentBadge n={counts[c.id]} /></span>
+                  <span className="min-w-0 truncate font-semibold">{c.name}{isPartnerClient(c) && <SaygakBadge />}<CommentBadge n={counts[c.id]} /></span>
                   <span className="shrink-0 text-xs text-gray-500">{c.ordersCount} ta zakaz</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-3 text-sm">
@@ -71,7 +74,7 @@ export default function Clients() {
               <tbody className="divide-y divide-gray-100">
                 {rows.map((c) => (
                   <tr key={c.id} onClick={() => setSelected(c.id)} className="cursor-pointer hover:bg-gray-50">
-                    <td data-label="Ism" className="td font-medium">{c.name}<CommentBadge n={counts[c.id]} /></td>
+                    <td data-label="Ism" className="td font-medium">{c.name}{isPartnerClient(c) && <SaygakBadge />}<CommentBadge n={counts[c.id]} /></td>
                     <td data-label="Telefon" className="td text-gray-600">{formatPhone(c.phone)}</td>
                     <td data-label="Zakazlar" className="td text-right">{c.ordersCount}</td>
                     <td data-label="Qarz" className={`td text-right ${c.debt > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`}>{c.debt > 0 ? fmtMoney(c.debt) : '—'}</td>
@@ -104,7 +107,14 @@ export function ClientModal({ id, onClose, onChanged }: { id: number; onClose: (
   useEffect(load, [load]);
   const changed = () => { load(); onChanged?.(); };
   const manage = can('clients.manage');
+  const [toggling, setToggling] = useState(false);
+  const partner = isPartnerClient(c);
 
+  const togglePartner = async (v: boolean) => {
+    setToggling(true); setErr('');
+    try { await api(`/clients/${id}`, { method: 'PATCH', body: { isPartner: v } }); changed(); } catch (x) { setErr((x as Error).message); }
+    setToggling(false);
+  };
   const remove = async () => {
     if (!c || !window.confirm(`"${c.name}" mijozini o'chirasizmi? Manzillari ham o'chadi.`)) return;
     try { await api(`/clients/${id}`, { method: 'DELETE' }); onChanged?.(); onClose(); } catch (x) { setErr((x as Error).message); }
@@ -129,10 +139,17 @@ export function ClientModal({ id, onClose, onChanged }: { id: number; onClose: (
                 title={c.ordersCount > 0 ? "Zakazlari bor mijozni o'chirib bo'lmaydi" : ''}><Trash2 size={15} /> O'chirish</button>
             </div>
           )}
+          {manage && (
+            <label className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-2.5 text-sm">
+              <span><b>Saygak</b> <span className="text-gray-500">· o'z narxi, logini va oylik to'lovi bor hamkor</span></span>
+              <Switch label="Saygak" checked={partner} disabled={toggling} onChange={togglePartner} />
+            </label>
+          )}
           <ErrorBox msg={err} />
           <Tabs value={tab} onChange={setTab} tabs={[{ id: 'info', label: "Ma'lumot" }, { id: 'comments', label: 'Izohlar', badge: commentCount }]} />
           {tab === 'comments' && <Comments bare entity="client" entityId={id} onChange={() => setCv((v) => v + 1)} />}
           {tab === 'info' && <>
+          {partner && <ClientPartnerPanel client={c} onChanged={changed} />}
           <div className="mb-5">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Manzillar ({c.addresses.length})</h3>
