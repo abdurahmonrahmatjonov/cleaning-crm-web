@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { api } from '../api';
+import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
 import type { ClientDetail, ClientPrice } from '../types';
 import { ErrorBox, Field, Loading } from '../components/ui';
@@ -76,7 +76,7 @@ function PricesCard({ clientId }: { clientId: number }) {
                 <NumberInput className="!w-36 text-right" aria-label={`${r.serviceName} narxi`} placeholder="Narxsiz" min={1} max={1e9}
                   value={vals[r.serviceId] ?? ''} onChange={(v) => { setVals({ ...vals, [r.serviceId]: v }); setOk(false); }} />
               ) : (
-                <span className={r.price === null ? 'text-gray-400' : 'font-medium'}>{r.price === null ? 'Narxsiz' : r.price.toLocaleString('ru-RU')}</span>
+                <span className={r.price === null ? 'text-gray-400' : 'font-medium'}>{r.price === null ? 'Narxsiz' : fmtMoney(r.price)}</span>
               )}
             </li>
           ))}
@@ -102,17 +102,21 @@ function LoginCard({ clientId }: { clientId: number }) {
   const [show, setShow] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [err, setErr] = useState('');
+  const [loadErr, setLoadErr] = useState('');
+  const [tries, setTries] = useState(0);
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) { setLogin(undefined); return; }
     let live = true;
+    setLoadErr(''); setLogin(undefined);
+    // API: 200 with null means "no login yet"; any failure is a load error, never "no login".
     api<Login | null>(`/clients/${clientId}/login`)
-      .then((r) => live && setLogin(r))
-      .catch((x) => live && (setErr((x as Error).message), setLogin(null)));
+      .then((r) => live && setLogin(r ?? null))
+      .catch((x) => live && setLoadErr((x as Error).message || 'Xatolik'));
     return () => { live = false; };
-  }, [clientId, isAdmin]);
+  }, [clientId, isAdmin, tries]);
 
   const run = async (method: string, body: object, msg: string) => {
     setBusy(true); setErr(''); setOk('');
@@ -149,7 +153,7 @@ function LoginCard({ clientId }: { clientId: number }) {
       </Field>
       <div className="flex gap-2">
         <button className="btn-primary !h-9 !px-4" disabled={busy}>{busy ? 'Saqlanmoqda…' : login ? 'Parolni saqlash' : 'Login yaratish'}</button>
-        {login && <button type="button" className="btn-ghost !h-9 !px-3" onClick={() => { setResetting(false); setPassword(''); }}>Bekor</button>}
+        {login && <button type="button" className="btn-ghost !h-9 !px-3" onClick={() => { setResetting(false); setPassword(''); setShow(false); setErr(''); }}>Bekor</button>}
       </div>
     </form>
   );
@@ -159,7 +163,12 @@ function LoginCard({ clientId }: { clientId: number }) {
       <h3 className="mb-2 text-sm font-semibold">Login</h3>
       <ErrorBox msg={err} />
       {ok && <div className="mb-2 text-sm text-green-600">{ok}</div>}
-      {login === undefined ? <Loading /> : !login ? form : (
+      {loadErr ? (
+        <div className="space-y-2">
+          <ErrorBox msg={loadErr} />
+          <button className="btn-ghost !h-9 !px-3" onClick={() => setTries((n) => n + 1)}>Qayta urinish</button>
+        </div>
+      ) : login === undefined ? <Loading /> : !login ? form : (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>Login: <b>{login.username}</b></span>
@@ -169,7 +178,7 @@ function LoginCard({ clientId }: { clientId: number }) {
             </label>
           </div>
           {resetting ? form : (
-            <button className="btn-ghost !h-9 !px-3" onClick={() => { setUsername(login.username); setResetting(true); setOk(''); }}>Parolni yangilash</button>
+            <button className="btn-ghost !h-9 !px-3" onClick={() => { if (window.confirm("Parol almashtiriladi. Davom etasizmi?")) { setUsername(login.username); setResetting(true); setOk(''); } }}>Parolni yangilash</button>
           )}
         </div>
       )}

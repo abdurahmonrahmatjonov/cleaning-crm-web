@@ -7,6 +7,14 @@ import { NumberInput } from '../components/fields';
 
 const card = 'rounded-xl border border-gray-200 p-3';
 const month = () => todayStr().slice(0, 7);
+const round2 = (n: number) => Math.round(n * 100) / 100;
+/** Money with tiyin shown only when the amount has a fractional part. */
+const fmtMoney2 = (n: number) => {
+  const x = round2(n);
+  return Number.isInteger(x) ? fmtMoney(x) : new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x) + " so'm";
+};
+/** Plain numeric string for an input: at most 2 decimals, no trailing zeros. */
+const plain2 = (n: number) => round2(n).toFixed(2).replace(/\.?0+$/, '');
 
 /** Lump payment form, payment history and monthly statement of a saygak. */
 export function PartnerMoney({ clientId, onChanged }: { clientId: number; onChanged: () => void }) {
@@ -31,7 +39,7 @@ function PayCard({ clientId, v, onPaid }: { clientId: number; v: number; onPaid:
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ docNum: number; cash: number; disc: number }[] | null>(null);
 
-  // Closing balance of the current month equals the saygak's current debt (API doc).
+  // Closing balance of the current month approximates the saygak's debt. It is only a hint: the server decides.
   useEffect(() => {
     let live = true;
     api<Statement>(`/clients/${clientId}/statement?month=${month()}`).then((s) => live && setDebt(s.closing)).catch((x) => live && setErr((x as Error).message));
@@ -39,11 +47,11 @@ function PayCard({ clientId, v, onPaid }: { clientId: number; v: number; onPaid:
   }, [clientId, v]);
 
   const allowed = can('orders.payments');
+  const over = debt !== null && round2(Number(amount || 0) + Number(discount || 0)) > round2(debt);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const a = Number(amount || 0), d = Number(discount || 0);
+    const a = round2(Number(amount || 0)), d = round2(Number(discount || 0));
     if (a + d <= 0) return setErr("Summani kiriting");
-    if (debt !== null && a + d > debt) return setErr(`Summa qarzdan oshib ketdi (qarz ${fmtMoney(debt)})`);
     setBusy(true); setErr(''); setDone(null);
     try {
       const r = await api<{ allocations: { docNum: number; cash: number; disc: number }[]; debtLeft: number }>(`/clients/${clientId}/payments`, {
@@ -58,16 +66,22 @@ function PayCard({ clientId, v, onPaid }: { clientId: number; v: number; onPaid:
     <form onSubmit={submit} className={card}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Oylik to'lov qabul qilish</h3>
-        <span className="text-sm">Qarz: <b className={debt ? 'text-red-600' : ''}>{debt === null ? '…' : fmtMoney(debt)}</b></span>
+        <span className="text-sm">Saygak qarzi: <b className={debt ? 'text-red-600' : ''}>{debt === null ? '…' : fmtMoney2(debt)}</b></span>
       </div>
       <ErrorBox msg={err} />
       {!allowed && <div className="text-sm text-gray-500">To'lov qabul qilish uchun ruxsat yo'q</div>}
       <fieldset disabled={!allowed || busy} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Summa"><NumberInput value={amount} onChange={setAmount} min={0} max={debt ?? undefined} /></Field>
-          {can('orders.discount') && <Field label="Chegirma"><NumberInput value={discount} onChange={setDiscount} min={0} max={debt ?? undefined} /></Field>}
+          <Field label="Summa">
+            <div className="flex gap-2">
+              <NumberInput decimal value={amount} onChange={setAmount} min={0} />
+              <button type="button" className="btn-ghost !h-9 shrink-0 !px-3" disabled={!debt || debt <= 0} onClick={() => debt && setAmount(plain2(debt))}>To'liq qarz</button>
+            </div>
+          </Field>
+          {can('orders.discount') && <Field label="Chegirma"><NumberInput decimal value={discount} onChange={setDiscount} min={0} /></Field>}
           <Field label="Sana"><input className="input" type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value)} required /></Field>
         </div>
+        {over && <div className="text-sm text-amber-600">Summa qarzdan oshib ketdi, server tekshiradi</div>}
         <button className="btn-primary !h-9 !px-4">{busy ? 'Saqlanmoqda…' : "To'lovni qabul qilish"}</button>
       </fieldset>
       {done && (
@@ -94,7 +108,10 @@ function History({ clientId, v, onChanged }: { clientId: number; v: number; onCh
 
   const reverse = async (id: string) => {
     setBusy(true); setErr('');
-    try { await api(`/clients/${clientId}/payments/${id}`, { method: 'DELETE' }); setConfirm(null); onChanged(); } catch (x) { setErr((x as Error).message); }
+    try { await api(`/clients/${clientId}/payments/${id}`, { method: 'DELETE' }); setConfirm(null); onChanged(); } catch (x) {
+      setErr((x as Error).message);
+      if ((x as { status?: number }).status === 409) { setConfirm(null); onChanged(); } // already reversed elsewhere: refresh
+    }
     setBusy(false);
   };
 
@@ -114,13 +131,13 @@ function History({ clientId, v, onChanged }: { clientId: number; v: number; onCh
                 </div>
                 {off && <div className="text-xs">bekor qilingan{b.reversedByName && ` (${b.reversedByName})`}</div>}
                 {isAdmin && !off && (confirm === b.batchId ? (
-                  <div className="mt-1 flex items-center gap-2 text-xs">
-                    <span className="text-red-600">Shu to'lov bekor qilinsinmi?</span>
-                    <button className="font-semibold text-red-600 hover:underline disabled:opacity-50" disabled={busy} onClick={() => reverse(b.batchId)}>Ha, bekor qilish</button>
-                    <button className="text-gray-500 hover:underline" disabled={busy} onClick={() => setConfirm(null)}>Yo'q</button>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-red-600">Shu to'lov bekor qilinsinmi?</span>
+                    <button className="btn-ghost !h-9 !px-3 font-semibold !text-red-600" disabled={busy} onClick={() => reverse(b.batchId)}>Ha, bekor qilish</button>
+                    <button className="btn-ghost !h-9 !px-3" disabled={busy} onClick={() => setConfirm(null)}>Yo'q</button>
                   </div>
                 ) : (
-                  <button className="mt-1 text-xs font-semibold text-red-600 hover:underline" onClick={() => setConfirm(b.batchId)}>Bekor qilish</button>
+                  <button className="btn-ghost mt-1 !h-9 !px-3 font-semibold !text-red-600" onClick={() => setConfirm(b.batchId)}>Bekor qilish</button>
                 ))}
               </li>
             );
@@ -143,7 +160,7 @@ function StatementCard({ clientId, v }: { clientId: number; v: number }) {
   }, [clientId, m]);
   useEffect(load, [load, v]);
 
-  const stats: [string, number][] = s ? [['Boshlang\'ich qoldiq', s.opening], ['Hisoblangan', s.charges], ["To'langan", s.credits], ['Yakuniy qoldiq', s.closing]] : [];
+  const stats: [string, number][] = s ? [['Boshlang\'ich qoldiq', s.opening], ['Hisoblangan', s.charges], ["To'langan + chegirma", s.credits], ['Yakuniy qoldiq', s.closing]] : [];
   return (
     <div className={card}>
       <div className="mb-2 flex items-center justify-between gap-2">
