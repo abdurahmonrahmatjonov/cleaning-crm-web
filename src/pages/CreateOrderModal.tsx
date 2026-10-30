@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Plus, Trash2, UserRound, X } from 'lucide-react';
 import { api } from '../api';
 import { isPartnerClient, type Client, type ClientDetail, type ClientPrice, type DictItem } from '../types';
 import { formatNumber, formatPhone } from '../format';
 import ClientPicker from '../components/ClientPicker';
-import { ErrorBox, Field, Modal } from '../components/ui';
+import { ErrorBox, Field, Modal, SaygakBadge } from '../components/ui';
 import { NumberInput, PhoneInput, Select } from '../components/fields';
 import LocationPicker, { type LatLng } from '../components/LocationPicker';
 
@@ -29,13 +29,17 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
   const setLine = (i: number, patch: Partial<L>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   // Pick a client: load their saved addresses and default to the most recent one.
+  const pickSeq = useRef(0); // a late response from an earlier pick must not overwrite a later one
   const choose = async (c: Client) => {
+    const seq = ++pickSeq.current;
     setErr('');
     try {
       const d = await api<ClientDetail>(`/clients/${c.id}`);
+      if (seq !== pickSeq.current) return;
       if (isPartnerClient(d)) {
         // Saygak: no address; only services with a saved price can be ordered.
         const pr = await api<{ data: ClientPrice[] }>(`/clients/${d.id}/prices`);
+        if (seq !== pickSeq.current) return;
         const priced = pr.data.filter((p) => p.price != null);
         setPrices(priced);
         setLines((ls) => ls.map((l) => (priced.some((p) => String(p.serviceId) === l.serviceId) ? l : { serviceId: '', price: '' })));
@@ -47,7 +51,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
       const last = d.addresses[0];
       if (last) applyAddress(String(last.id), d);
       else { setAddressId(''); setLoc(null); setLandmark(''); }
-    } catch (x) { setErr((x as Error).message); }
+    } catch (x) { if (seq === pickSeq.current) setErr((x as Error).message); }
   };
   const applyAddress = (id: string, from: ClientDetail | null = client) => {
     setAddressId(id);
@@ -56,7 +60,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
     else { setLoc(null); setLandmark(''); }
   };
   const changeMode = (m: 'existing' | 'new') => {
-    setMode(m); setClient(null); setPrices(null); setAddressId(''); setLoc(null); setLandmark(''); setErr('');
+    pickSeq.current++; setMode(m); setClient(null); setPrices(null); setAddressId(''); setLoc(null); setLandmark(''); setErr('');
   };
   // clicking the map while a saved address is selected means a new place
   const pickOnMap = (p: LatLng) => { setLoc(p); setAddressId(''); };
@@ -111,7 +115,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-brand-700"><UserRound size={19} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{client.name}</div>
-                  <div className="text-xs text-gray-500">{partner && <span className="mr-1 rounded-full bg-brand-100 px-2 py-0.5 font-semibold text-brand-700">Saygak</span>}{formatPhone(client.phone)} · {client.ordersCount} ta zakaz{client.debt > 0 ? ' · qarzi bor' : ''}</div>
+                  <div className="text-xs text-gray-500">{partner && <><SaygakBadge /> </>}{formatPhone(client.phone)} · {client.ordersCount} ta zakaz{client.debt > 0 ? ' · qarzi bor' : ''}</div>
                 </div>
                 <button type="button" onClick={() => changeMode('existing')} aria-label="Boshqa mijoz tanlash" title="Boshqa mijoz" className="grid h-8 w-8 place-items-center rounded-full text-gray-500 hover:bg-gray-200"><X size={16} /></button>
               </div>
@@ -151,7 +155,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
                   }} />
                 </div>
                 {partner ? (
-                  <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 sm:w-40 sm:flex-none">
+                  <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 sm:w-40 sm:flex-none">
                     {priceOf(l.serviceId) ? `${formatNumber(String(priceOf(l.serviceId)!.price))} so'm / ${priceOf(l.serviceId)!.unit}` : 'Narx'}
                   </div>
                 ) : <NumberInput className="flex-1 sm:!w-40 sm:flex-none" min={0} placeholder={`Narx (1 ${services.find((s) => String(s.id) === l.serviceId)?.unit ?? 'kv.m'})`} value={l.price} onChange={(v) => setLine(i, { price: v })} required />}

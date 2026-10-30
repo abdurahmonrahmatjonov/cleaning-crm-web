@@ -4,7 +4,7 @@ import { MapPin, Plus, Search } from 'lucide-react';
 import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
 import type { Order, Page } from '../types';
-import { Empty, Loading, Pager, StatusBadge } from '../components/ui';
+import { Empty, Loading, Pager, SaygakBadge, StatusBadge } from '../components/ui';
 import { formatPhone } from '../format';
 import { CommentBadge, useCommentCounts } from '../components/Comments';
 import CreateOrderModal from './CreateOrderModal';
@@ -20,7 +20,6 @@ const TABS = {
 } as const;
 type Tab = keyof typeof TABS;
 
-const SaygakBadge = () => <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Saygak</span>;
 
 export default function Orders() {
   const { tab } = useParams();

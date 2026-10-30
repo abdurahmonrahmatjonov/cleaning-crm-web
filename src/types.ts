@@ -36,7 +36,7 @@ export const isPartnerClient = (c: { isPartner?: number | boolean } | null | und
 export interface Address { id: number; latitude: number; longitude: number; landmark: string; lastUsedAt: string }
 export interface ClientDetail extends Client {
   addresses: Address[];
-  orders: { docNum: number; status: string; docTotal: number; paid: number; createdAt: string; deliveredDate: string }[];
+  orders: { docNum: number; kind: 'regular' | 'partner'; status: string; docTotal: number; paid: number; createdAt: string; deliveredDate: string }[];
 }
 export interface Debtor { clientId: number; name: string; phone: string; ordersCount: number; debt: number }
 export interface Payment { amount: number; discount?: number; paidDate: string; [k: string]: unknown }

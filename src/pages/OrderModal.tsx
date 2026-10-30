@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, fmtMoney, todayStr } from '../api';
 import { useAuth } from '../auth';
 import type { Order, Payment } from '../types';
-import { ErrorBox, Field, Loading, Modal, StatusBadge, Tabs } from '../components/ui';
+import { ErrorBox, Field, Loading, Modal, SaygakBadge, StatusBadge, Tabs } from '../components/ui';
 import { NumberInput, PhoneInput } from '../components/fields';
 import { formatNumber, formatPhone } from '../format';
 import OrderHistory from '../components/History';
@@ -45,7 +45,7 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
         <div>
           <div className="font-semibold">{order.clientName}</div>
           <div className="text-gray-500">{formatPhone(order.clientPhone)}</div>
-          {order.kind === 'partner' ? <span className="mt-1 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Saygak</span> : <>
+          {order.kind === 'partner' ? <span className="mt-1 inline-block"><SaygakBadge /></span> : <>
             <div className="mt-1 text-gray-500">{order.landmark}</div>
             <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
               href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
@@ -106,7 +106,7 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
           )}
           {open && canManage && (
             <div className="mt-5 flex gap-2 border-t border-gray-100 pt-4">
-              {order.status === 'Zakaz Qabul qilindi' && <button className="btn-ghost" onClick={() => setMode('edit')}>Tahrirlash</button>}
+              {order.status === 'Zakaz Qabul qilindi' && order.kind !== 'partner' && <button className="btn-ghost" onClick={() => setMode('edit')}>Tahrirlash</button>}
               <button className="btn-ghost !text-red-600" onClick={() => setMode('cancel')}>Bekor qilish</button>
             </div>
           )}
