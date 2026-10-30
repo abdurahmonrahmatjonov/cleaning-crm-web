@@ -243,7 +243,7 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Yetkazib berilgan sana"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
+        <Field label={partner ? 'Topshirilgan sana' : 'Yetkazib berilgan sana'}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
         {!partner && <Field label="Mijozdan olingan summa"><NumberInput min={0} value={paid} onChange={setPaid} placeholder="0" /></Field>}
         {!partner && canDiscount && <Field label="Chegirma (so'm)"><NumberInput min={0} max={Math.round(total)} value={discount} onChange={setDiscount} placeholder="0" /></Field>}
       </div>
@@ -256,7 +256,7 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
               ? <span className="w-32 text-right text-sm text-gray-500">{l.quantity} dona</span>
               : <NumberInput decimal className="!w-32" min={0.01} value={sqm[l.id] ?? ''} onChange={(v) => setSqm({ ...sqm, [l.id]: v })} placeholder={l.unit} required />}
             {l.unit !== 'dona' && l.sizesTotal > 0 && +sqm[l.id] !== l.sizesTotal && (
-              <span className="mt-1 w-full text-xs text-amber-600">o'lchamlardan farq qiladi: {l.sizesTotal} → {sqm[l.id] || 0}</span>
+              <span className="mt-1 w-full text-xs text-amber-600">o'lchamlardan farq qiladi: {formatNumber(String(l.sizesTotal))} → {formatNumber(sqm[l.id] || '0')}</span>
             )}
           </div>
         ))}

@@ -30,18 +30,25 @@ export default function SizesEditor({ rows, onChange, pieces }: {
   return (
     <div className="mt-2 space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3">
       <div className="text-xs font-semibold text-gray-600">O'lchamlar (eni × bo'yi, m)</div>
-      {rows.map((r, i) => (
-        <div key={i} className="flex flex-wrap items-center gap-2">
-          <NumberInput decimal max={100} className="!w-24" value={r.width} onChange={(v) => set(i, { width: v })} placeholder="eni" aria-label="Eni (m)" />
-          <span className="text-gray-400">×</span>
-          <NumberInput decimal max={100} className="!w-24" value={r.length} onChange={(v) => set(i, { length: v })} placeholder="bo'yi" aria-label="Bo'yi (m)" />
-          <span className="min-w-16 flex-1 text-sm tabular-nums text-gray-600">= {formatNumber(rowArea(r).toFixed(2))} kv.m</span>
-          <button type="button" className="grid h-10 w-10 place-items-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-red-600"
-            aria-label="O'chirish" onClick={() => onChange(rows.filter((_, j) => j !== i))}><X size={18} /></button>
-        </div>
-      ))}
+      {rows.map((r, i) => {
+        const half = (r.width === '') !== (r.length === '') || ((r.width !== '' || r.length !== '') && rowArea(r) === 0);
+        return (
+          <div key={i} className="flex flex-wrap items-center gap-2">
+            <NumberInput decimal min={0.01} max={100} required={r.length !== ''} pattern="\d+\.?\d*|\.\d+" className={`!w-24 ${half ? '!border-red-400' : ''}`}
+              value={r.width} onChange={(v) => set(i, { width: v })} placeholder="eni" aria-label="Eni (m)" />
+            <span className="text-gray-400">×</span>
+            <NumberInput decimal min={0.01} max={100} required={r.width !== ''} pattern="\d+\.?\d*|\.\d+" className={`!w-24 ${half ? '!border-red-400' : ''}`}
+              value={r.length} onChange={(v) => set(i, { length: v })} placeholder="bo'yi" aria-label="Bo'yi (m)" />
+            {half
+              ? <span className="min-w-16 flex-1 text-sm text-red-600">to'ldiring</span>
+              : <span className="min-w-16 flex-1 text-sm tabular-nums text-gray-600">= {formatNumber(rowArea(r).toFixed(2))} kv.m</span>}
+            <button type="button" className="grid h-10 w-10 place-items-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-red-600"
+              aria-label={`${i + 1}-gilamni o'chirish`} onClick={() => onChange(rows.filter((_, j) => j !== i))}><X size={18} /></button>
+          </div>
+        );
+      })}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" className="btn-ghost inline-flex min-h-10 items-center gap-1" onClick={() => onChange([...rows, { width: '', length: '' }])}>
+        <button type="button" disabled={rows.length >= 100} className="btn-ghost inline-flex min-h-10 items-center gap-1 disabled:opacity-50" onClick={() => onChange([...rows, { width: '', length: '' }])}>
           <Plus size={16} />Gilam qo'shish
         </button>
         <span className="text-sm font-semibold tabular-nums">Jami: {formatNumber(rowsTotal(rows).toFixed(2))} kv.m</span>
