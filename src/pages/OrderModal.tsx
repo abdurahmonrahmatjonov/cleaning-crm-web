@@ -45,20 +45,22 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
         <div>
           <div className="font-semibold">{order.clientName}</div>
           <div className="text-gray-500">{formatPhone(order.clientPhone)}</div>
-          <div className="mt-1 text-gray-500">{order.landmark}</div>
-          <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
-            href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
+          {order.kind === 'partner' ? <span className="mt-1 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Saygak</span> : <>
+            <div className="mt-1 text-gray-500">{order.landmark}</div>
+            <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
+              href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
+          </>}
         </div>
         <div className="w-full text-left text-xs text-gray-500 sm:w-auto sm:text-right">
           <StatusBadge s={order.status} partner={order.kind === 'partner'} />
-          <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>
-          <div>Kiritdi: {order.createdBy.name}</div>
+          {order.kind !== 'partner' && <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>}
+          <div className={order.kind === 'partner' ? 'mt-2' : ''}>Kiritdi: {order.createdBy.name}</div>
           {order.waybillNumber && <div>Nakladnoy: {order.waybillNumber}</div>}
           {order.deliveryTime && <div>Yetkazish: {order.deliveryTime.slice(0, 16)}</div>}
           {order.pickedUpBy && <div>Olib ketdi: {order.pickedUpBy}</div>}
           {order.washedBy && <div>Yuvdi: {order.washedBy}</div>}
           {order.packedBy && <div>Upakovka qildi: {order.packedBy}</div>}
-          {order.deliveredBy && <div>Yetkazdi: {order.deliveredBy}</div>}
+          {order.kind !== 'partner' && order.deliveredBy && <div>Yetkazdi: {order.deliveredBy}</div>}
         </div>
       </div>
 
@@ -173,6 +175,7 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
 }
 
 function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => void }) {
+  const partner = order.kind === 'partner';
   const [waybill, setWaybill] = useState(order.waybillNumber);
   const [delivery, setDelivery] = useState('');
   const [qty, setQty] = useState<Record<number, string>>({});
@@ -185,7 +188,7 @@ function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => v
     try {
       const o = await api<Order>(`/orders/${order.docNum}/pickup`, {
         method: 'PATCH',
-        body: { waybillNumber: waybill, deliveryTime: delivery, lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
+        body: { ...(waybill.trim() && { waybillNumber: waybill }), ...(delivery && { deliveryTime: delivery }), lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -195,8 +198,8 @@ function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => v
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nakladnoy raqami"><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required /></Field>
-        <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required /></Field>
+        <Field label="Nakladnoy raqami"><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required={!partner} /></Field>
+        <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required={!partner} /></Field>
       </div>
       <div className="space-y-2">
         <label className="label">Soni (dona)</label>
@@ -272,6 +275,7 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
 }
 
 function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => void; onSaved: (o: Order) => void }) {
+  const partner = order.kind === 'partner';
   const [name, setName] = useState(order.clientName);
   const [phone, setPhone] = useState(order.clientPhone);
   const [landmark, setLandmark] = useState(order.landmark);
@@ -286,7 +290,7 @@ function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => 
     try {
       const o = await api<Order>(`/orders/${order.docNum}`, {
         method: 'PATCH',
-        body: { clientName: name, clientPhone: phone, landmark, pickupTime: pickup, ...(loc && { location: loc }) },
+        body: partner ? { pickupTime: pickup } : { clientName: name, clientPhone: phone, landmark, pickupTime: pickup, ...(loc && { location: loc }) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -296,12 +300,14 @@ function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => 
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Mijoz ismi"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
-        <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
-        <Field label="Orientir"><input className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} /></Field>
+        {!partner && <>
+          <Field label="Mijoz ismi"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
+          <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
+          <Field label="Orientir"><input className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} /></Field>
+        </>}
         <Field label="Olib ketilish vaqti"><input className="input" type="datetime-local" value={pickup} onChange={(e) => setPickup(e.target.value)} required /></Field>
       </div>
-      <Field label="Lokatsiya"><LocationPicker value={loc} onChange={setLoc} /></Field>
+      {!partner && <Field label="Lokatsiya"><LocationPicker value={loc} onChange={setLoc} /></Field>}
       <div className="flex gap-2">
         <button type="button" className="btn-ghost" onClick={onCancel}>Ortga</button>
         <button className="btn-primary flex-1" disabled={busy}>{busy ? 'Saqlanmoqda…' : 'Saqlash'}</button>
