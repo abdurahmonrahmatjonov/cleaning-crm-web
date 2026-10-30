@@ -48,7 +48,22 @@ export default function Clients() {
           </div>
         </div>
         {loading && rows.length === 0 ? <Loading /> : rows.length === 0 ? <Empty text="Mijozlar topilmadi" /> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-gray-100 sm:hidden">
+            {rows.map((c) => (
+              <li key={c.id} onClick={() => setSelected(c.id)} className="cursor-pointer px-4 py-3.5 transition-colors active:bg-gray-50">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate font-semibold">{c.name}<CommentBadge n={counts[c.id]} /></span>
+                  <span className="shrink-0 text-xs text-gray-500">{c.ordersCount} ta zakaz</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-sm">
+                  <span className="text-gray-600">{formatPhone(c.phone)}</span>
+                  {c.debt > 0 ? <span className="font-semibold text-red-600">Qarz {fmtMoney(c.debt)}</span> : <span className="text-gray-400">Qarz yo'q</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="rtable w-full">
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr><th className="th">Ism</th><th className="th">Telefon</th><th className="th !text-right">Zakazlar</th><th className="th !text-right">Qarz</th></tr>
@@ -65,6 +80,7 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
+          </>
         )}
         <Pager page={meta.page} limit={meta.limit} total={meta.total} onChange={setPage} />
       </div>

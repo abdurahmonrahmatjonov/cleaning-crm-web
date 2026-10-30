@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { MapPin, Plus, Search } from 'lucide-react';
 import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
 import type { Order, Page } from '../types';
@@ -68,8 +68,34 @@ function OrderList({ tab }: { tab: Tab }) {
             <input className="input !pl-10" placeholder="Ism, telefon yoki DocNum…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
-        {loading && rows.length === 0 ? <Loading /> : rows.length === 0 ? <Empty text="Zakazlar topilmadi" /> : (
-          <div className="overflow-x-auto">
+        {loading && rows.length === 0 ? <Loading /> : rows.length === 0 ? <Empty text="Zakazlar topilmadi" /> : (<>
+          {/* Phones: one compact card per order */}
+          <ul className="divide-y divide-gray-100 lg:hidden">
+            {rows.map((o) => (
+              <li key={o.docNum} onClick={() => setSelected(o.docNum)} className="cursor-pointer px-4 py-3.5 transition-colors active:bg-gray-50">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-bold text-brand-600">#{o.docNum}</span>
+                  <StatusBadge s={o.status} />
+                </div>
+                <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate font-semibold">{o.clientName}<CommentBadge n={counts[o.docNum]} /></span>
+                  <span className="shrink-0 text-xs text-gray-500">{formatPhone(o.clientPhone)}</span>
+                </div>
+                {o.landmark && <div className="mt-1 flex items-start gap-1.5 text-sm text-gray-600"><MapPin size={14} className="mt-0.5 shrink-0 text-gray-400" /><span className="min-w-0">{o.landmark}</span></div>}
+                <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-gray-500">
+                  <span className="shrink-0 tabular-nums">{o.pickupTime.slice(0, 16)}</span>
+                  <span className="min-w-0 truncate">{o.lines.map((l) => l.serviceName).join(', ')}</span>
+                </div>
+                {tab === 'completed' && (
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Jami <b className="text-gray-900">{fmtMoney(o.docTotal)}</b></span>
+                    {o.debt > 0 ? <span className="font-semibold text-red-600">Qarz {fmtMoney(o.debt)}</span> : <span className="text-gray-400">Qarz yo'q</span>}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto lg:block">
             <table className="rtable w-full">
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr>
@@ -97,7 +123,7 @@ function OrderList({ tab }: { tab: Tab }) {
               </tbody>
             </table>
           </div>
-        )}
+        </>)}
         <Pager page={meta.page} limit={meta.limit} total={meta.total} onChange={setPage} />
       </div>
 

@@ -40,28 +40,28 @@ function Dict({ title, path, priced }: { title: string; path: string; priced?: b
   };
 
   return (
-    <div className="card p-4">
+    <div className="card min-w-0 p-4">
       <h1 className="mb-3 text-lg font-semibold">{title}</h1>
       <ErrorBox msg={err} />
       <ul className="divide-y divide-gray-100 text-sm">
         {items.map((it) => (
           <li key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-            <span className={`flex-1 ${it.isActive ? '' : 'text-gray-400 line-through'}`}>{it.name}</span>
+            <span className={`basis-full sm:flex-1 sm:basis-0 ${it.isActive ? '' : 'text-gray-400 line-through'}`}>{it.name}</span>
             {priced && (
-              <button className="text-xs font-semibold text-gray-700 hover:underline" onClick={() => setEditing(it)} title="Narx va o'lchov birligini o'zgartirish">
+              <button className="py-1.5 text-xs font-semibold text-gray-700 hover:underline" onClick={() => setEditing(it)} title="Narx va o'lchov birligini o'zgartirish">
                 {(it.defaultPrice ?? 0).toLocaleString('ru-RU')} so'm/{it.unit ?? 'kv.m'}
               </button>
             )}
-            <button className="text-xs font-semibold text-brand-600 hover:underline" onClick={() => rename(it)}>Nomini o'zgartirish</button>
-            <button className="text-xs font-semibold text-gray-500 hover:underline" onClick={() => run(() => api(`${path}/${it.id}`, { method: 'PATCH', body: { isActive: !it.isActive } }))}>
+            <button className="py-1.5 text-xs font-semibold text-brand-600 hover:underline" onClick={() => rename(it)}>Nomini o'zgartirish</button>
+            <button className="py-1.5 text-xs font-semibold text-gray-500 hover:underline" onClick={() => run(() => api(`${path}/${it.id}`, { method: 'PATCH', body: { isActive: !it.isActive } }))}>
               {it.isActive ? "O'chirish" : 'Yoqish'}
             </button>
           </li>
         ))}
       </ul>
-      <form onSubmit={add} className="mt-3 flex gap-2">
-        <input className="input" placeholder="Yangi nom" value={name} onChange={(e) => setName(e.target.value)} required />
-        {priced && <NumberInput className="!w-36" min={0} placeholder={`Narx (1 ${unit})`} value={price} onChange={setPrice} />}
+      <form onSubmit={add} className="mt-3 flex flex-wrap gap-2">
+        <input className="input min-w-0 basis-full sm:flex-1 sm:basis-0" placeholder="Yangi nom" value={name} onChange={(e) => setName(e.target.value)} required />
+        {priced && <NumberInput className="min-w-0 basis-full sm:basis-auto sm:!w-36 sm:flex-none" min={0} placeholder={`Narx (1 ${unit})`} value={price} onChange={setPrice} />}
         {priced && <UnitPicker value={unit} onChange={setUnit} />}
         <button className="btn-primary">Qo'shish</button>
       </form>

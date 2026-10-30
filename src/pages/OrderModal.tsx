@@ -48,7 +48,7 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
           <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
             href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
         </div>
-        <div className="text-right text-xs text-gray-500">
+        <div className="w-full text-left text-xs text-gray-500 sm:w-auto sm:text-right">
           <StatusBadge s={order.status} />
           <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>
           <div>Kiritdi: {order.createdBy.name}</div>

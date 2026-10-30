@@ -106,18 +106,18 @@ function StageStrip({ className = '' }: { className?: string }) {
           <NavLink
             key={s.to}
             to={s.to}
-            className={`group flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 text-[10px] font-medium transition-colors sm:flex-row sm:gap-2 sm:px-1 sm:py-3 sm:text-sm ${focusRing} ${
+            className={`group flex flex-col items-center justify-center gap-1 px-0.5 py-2.5 text-[10px] font-medium transition-colors lg:flex-row lg:gap-2 lg:px-1 lg:py-3 lg:text-sm ${focusRing} ${
               i === idx ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'
             }`}
           >
             <s.icon size={16} className={`shrink-0 transition-colors ${i === idx ? 'text-brand-600' : ''}`} />
-            <span className="sm:hidden">{s.label}</span>
-            <span className="hidden sm:inline">{s.full}</span>
+            <span className="lg:hidden">{s.label}</span>
+            <span className="hidden lg:inline">{s.full}</span>
           </NavLink>
         ))}
         <span
           aria-hidden
-          className="absolute bottom-0 h-[3px] px-3 transition-transform duration-300 ease-[cubic-bezier(0.3,1.2,0.5,1)] sm:px-6"
+          className="absolute bottom-0 h-[3px] px-3 transition-transform duration-300 ease-[cubic-bezier(0.3,1.2,0.5,1)] lg:px-6"
           style={{ width: `${100 / stages.length}%`, transform: `translateX(${idx * 100}%)`, left: 0 }}
         >
           <span className="block h-full rounded-full bg-saffron" />
@@ -230,15 +230,15 @@ function Dock({ onMore }: { onMore: () => void }) {
   const { unread } = useChatUnread();
   const { pathname } = useLocation();
   const items = [
-    ...(can('orders.view') ? [{ to: '/sales/received', label: 'Sotuvlar', icon: ClipboardList, active: pathname.startsWith('/sales') }] : []),
-    ...(can('clients.view') ? [{ to: '/clients', label: 'Mijozlar', icon: UsersIcon, active: pathname.startsWith('/clients') }] : []),
-    ...(can('debtors.view') ? [{ to: '/debtors', label: 'Qarzdorlar', icon: Wallet, active: pathname.startsWith('/debtors') }] : []),
+    ...(can('orders.view') ? [{ to: '/sales/received', label: 'Sotuvlar', icon: ClipboardList, active: pathname.startsWith('/sales'), phone: true }] : []),
+    ...(can('clients.view') ? [{ to: '/clients', label: 'Mijozlar', icon: UsersIcon, active: pathname.startsWith('/clients'), phone: true }] : []),
+    ...(can('debtors.view') ? [{ to: '/debtors', label: 'Qarzdorlar', icon: Wallet, active: pathname.startsWith('/debtors'), phone: true }] : []),
     ...(can('expenses.manage') ? [{ to: '/expenses', label: 'Xarajatlar', icon: Receipt, active: pathname.startsWith('/expenses') }] : []),
     ...(can('reports.view') ? [{ to: '/summary', label: 'Hisobot', icon: BarChart3, active: pathname.startsWith('/summary') }] : []),
-    { to: '/chat', label: 'Chat', icon: MessageCircle, active: pathname.startsWith('/chat'), badge: unread.total },
+    { to: '/chat', label: 'Chat', icon: MessageCircle, active: pathname.startsWith('/chat'), badge: unread.total, phone: true },
   ];
   const cls = (on: boolean) =>
-    `group flex min-w-[3.5rem] flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition active:scale-90 sm:min-w-[4.5rem] sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm ${
+    `group flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-1 py-1.5 text-[11px] font-medium transition active:scale-90 lg:min-w-[4.5rem] lg:flex-none lg:flex-row lg:gap-2 lg:px-4 lg:py-2.5 lg:text-sm ${
       on ? 'bg-brand-600 text-snow shadow-md shadow-brand-600/30' : 'text-gray-600 hover:bg-gray-100'
     }`;
   return (
@@ -246,14 +246,14 @@ function Dock({ onMore }: { onMore: () => void }) {
       aria-label="Asosiy menyu"
       className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
-      <div className="anim-dock flex max-w-full items-center gap-1 rounded-full border border-gray-200 bg-white/85 p-1.5 shadow-[0_12px_36px_-10px_rgb(16_39_43/0.45)] backdrop-blur-xl">
+      <div className="anim-dock flex w-full max-w-md items-center gap-0.5 rounded-full lg:w-auto lg:max-w-full lg:gap-1 border border-gray-200 bg-white/85 p-1.5 shadow-[0_12px_36px_-10px_rgb(16_39_43/0.45)] backdrop-blur-xl">
         {items.map((i) => (
-          <NavLink key={i.to} to={i.to} className={() => cls(i.active)}>
+          <NavLink key={i.to} to={i.to} className={() => `${cls(i.active)} ${'phone' in i ? '' : 'max-lg:hidden'}`}>
             <span className="relative"><i.icon size={19} />{'badge' in i && <UnreadDot n={i.badge as number} className="absolute -right-2 -top-1.5" />}</span>{i.label}
           </NavLink>
         ))}
         <button onClick={onMore} className={cls(false)} aria-label="Boshqa bo'limlar">
-          <Menu size={19} /><span className="hidden sm:inline">Yana</span><span className="sm:hidden">Yana</span>
+          <Menu size={19} /><span>Yana</span>
         </button>
       </div>
     </nav>

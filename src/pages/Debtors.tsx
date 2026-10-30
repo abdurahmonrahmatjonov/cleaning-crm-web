@@ -26,7 +26,19 @@ export default function Debtors() {
       </div>
       <div className="card overflow-hidden">
         {loading ? <Loading /> : rows.length === 0 ? <Empty text="Qarzdorlar yo'q" /> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-gray-100 sm:hidden">
+            {rows.map((d) => (
+              <li key={d.clientId} onClick={() => setSelected(d.clientId)} className="cursor-pointer px-4 py-3.5 transition-colors active:bg-gray-50">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate font-semibold">{d.name}</span>
+                  <span className="shrink-0 font-semibold text-red-600">{fmtMoney(d.debt)}</span>
+                </div>
+                <div className="mt-1 flex justify-between text-sm text-gray-500"><span>{formatPhone(d.phone)}</span><span>{d.ordersCount} ta zakaz</span></div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="rtable w-full">
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr><th className="th">Mijoz</th><th className="th">Telefon</th><th className="th !text-right">Zakazlar</th><th className="th !text-right">Qarz</th></tr>
@@ -43,6 +55,7 @@ export default function Debtors() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
       {selected && <ClientModal id={selected} onClose={() => setSelected(null)} onChanged={load} />}
