@@ -7,6 +7,7 @@ import { NumberInput, PhoneInput } from '../components/fields';
 import { formatNumber, formatPhone } from '../format';
 import OrderHistory from '../components/History';
 import Comments, { useCommentCounts } from '../components/Comments';
+import SizesEditor, { rowsFromLine, rowsPayload, type SizeRow } from '../components/SizesEditor';
 import LocationPicker, { type LatLng } from '../components/LocationPicker';
 
 const toInput = (s: string) => s.slice(0, 16).replace(' ', 'T');
@@ -49,7 +50,7 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
             href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
         </div>
         <div className="w-full text-left text-xs text-gray-500 sm:w-auto sm:text-right">
-          <StatusBadge s={order.status} />
+          <StatusBadge s={order.status} partner={order.kind === 'partner'} />
           <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>
           <div>Kiritdi: {order.createdBy.name}</div>
           {order.waybillNumber && <div>Nakladnoy: {order.waybillNumber}</div>}
@@ -123,6 +124,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
 }) {
   const start = (l: Order['lines'][number]) => String(path === 'pack' ? l.washedQuantity || l.quantity : l.quantity);
   const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(order.lines.map((l) => [l.id, start(l)])));
+  // Per-carpet sizes for kv.m lines; pack starts from what wash saved.
+  const [sizes, setSizes] = useState<Record<number, SizeRow[]>>(() => Object.fromEntries(order.lines.map((l) => [l.id, rowsFromLine(l)])));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -132,7 +135,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
     try {
       onSaved(await api<Order>(`/orders/${order.docNum}/${path}`, {
         method: 'PATCH',
-        body: { lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
+        // Always send sizes for kv.m lines so editing and clearing both work.
+        body: { lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id], ...(l.unit === 'kv.m' && { sizes: rowsPayload(sizes[l.id] ?? []) }) })) },
       }));
     } catch (x) { setErr((x as Error).message); setBusy(false); }
   };
@@ -146,7 +150,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
         {order.lines.map((l) => {
           const differs = path === 'pack' && +qty[l.id] !== l.pickedQuantity;
           return (
-            <div key={l.id} className="flex items-center gap-3">
+            <div key={l.id}>
+            <div className="flex items-center gap-3">
               <span className="flex-1 text-sm font-medium">
                 {l.serviceName}
                 <span className="block text-xs font-normal text-gray-400">
@@ -155,6 +160,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
                 </span>
               </span>
               <NumberInput className="!w-28" min={1} value={qty[l.id] ?? ''} onChange={(v) => setQty({ ...qty, [l.id]: v })} required />
+            </div>
+            {l.unit === 'kv.m' && <SizesEditor rows={sizes[l.id] ?? []} onChange={(r) => setSizes({ ...sizes, [l.id]: r })} pieces={+qty[l.id] || 0} />}
             </div>
           );
         })}
@@ -209,13 +216,16 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
   const [discount, setDiscount] = useState('');
   const [date, setDate] = useState(todayStr());
   const [paid, setPaid] = useState('');
-  const [sqm, setSqm] = useState<Record<number, string>>({});
+  const partner = order.kind === 'partner';
+  // kv.m starts from the saved sizes total; still editable (the client is charged for what is entered).
+  const [sqm, setSqm] = useState<Record<number, string>>(() =>
+    Object.fromEntries(order.lines.filter((l) => l.unit === 'kv.m' && l.sizesTotal > 0).map((l) => [l.id, String(l.sizesTotal)])));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   const amountOf = (l: Order['lines'][number]) => (l.unit === 'dona' ? l.quantity : +sqm[l.id] || 0);
   const total = order.lines.reduce((s, l) => s + amountOf(l) * l.price, 0);
-  const debt = Math.max(total - (+discount || 0) - (+paid || 0), 0);
+  const debt = partner ? total : Math.max(total - (+discount || 0) - (+paid || 0), 0);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -223,7 +233,7 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
     try {
       const o = await api<Order>(`/orders/${order.docNum}/deliver`, {
         method: 'PATCH',
-        body: { deliveredDate: date, paid: +paid || 0, ...(+discount > 0 && { discount: +discount }), lines: order.lines.map((l) => (l.unit === 'dona' ? { id: l.id } : { id: l.id, sqm: +sqm[l.id] })) },
+        body: { deliveredDate: date, paid: partner ? 0 : +paid || 0, ...(!partner && +discount > 0 && { discount: +discount }), lines: order.lines.map((l) => (l.unit === 'dona' ? { id: l.id } : { id: l.id, sqm: +sqm[l.id] })) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -234,26 +244,29 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Yetkazib berilgan sana"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
-        <Field label="Mijozdan olingan summa"><NumberInput min={0} value={paid} onChange={setPaid} placeholder="0" /></Field>
-        {canDiscount && <Field label="Chegirma (so'm)"><NumberInput min={0} max={Math.round(total)} value={discount} onChange={setDiscount} placeholder="0" /></Field>}
+        {!partner && <Field label="Mijozdan olingan summa"><NumberInput min={0} value={paid} onChange={setPaid} placeholder="0" /></Field>}
+        {!partner && canDiscount && <Field label="Chegirma (so'm)"><NumberInput min={0} max={Math.round(total)} value={discount} onChange={setDiscount} placeholder="0" /></Field>}
       </div>
       <div className="space-y-2">
         <label className="label">O'lchamlar (narx × miqdor)</label>
         {order.lines.map((l) => (
-          <div key={l.id} className="flex items-center gap-3">
+          <div key={l.id} className="flex flex-wrap items-center gap-x-3">
             <span className="flex-1 text-sm font-medium">{l.serviceName} <span className="text-gray-400">· {l.quantity} dona · {fmtMoney(l.price)}/{l.unit}</span></span>
             {l.unit === 'dona'
               ? <span className="w-32 text-right text-sm text-gray-500">{l.quantity} dona</span>
               : <NumberInput decimal className="!w-32" min={0.01} value={sqm[l.id] ?? ''} onChange={(v) => setSqm({ ...sqm, [l.id]: v })} placeholder={l.unit} required />}
+            {l.unit !== 'dona' && l.sizesTotal > 0 && +sqm[l.id] !== l.sizesTotal && (
+              <span className="mt-1 w-full text-xs text-amber-600">o'lchamlardan farq qiladi: {l.sizesTotal} → {sqm[l.id] || 0}</span>
+            )}
           </div>
         ))}
       </div>
       <div className="space-y-1 rounded-md bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700">
         <div className="flex justify-between"><span>Jami</span><span>{fmtMoney(total)}</span></div>
-        {+discount > 0 && <div className="flex justify-between"><span>Chegirma</span><span>− {fmtMoney(+discount)}</span></div>}
+        {!partner && +discount > 0 && <div className="flex justify-between"><span>Chegirma</span><span>− {fmtMoney(+discount)}</span></div>}
         <div className="flex justify-between"><span>Qarz</span><span>{fmtMoney(debt)}</span></div>
       </div>
-      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Saqlanmoqda…' : 'Yetkazib berildi'}</button>
+      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Saqlanmoqda…' : partner ? 'Topshirildi' : 'Yetkazib berildi'}</button>
     </form>
   );
 }
@@ -383,7 +396,7 @@ function LinesTable({ order }: { order: Order }) {
       <thead className="text-left text-xs uppercase text-gray-500"><tr><th className="py-2">Xizmat</th><th>Soni</th><th>O'lcham</th><th className="text-right">Narx</th><th className="text-right">Jami</th></tr></thead>
       <tbody className="divide-y divide-gray-100">
         {order.lines.map((l) => (
-          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}</td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
+          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}</td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}{l.unit === 'kv.m' && l.sizes.length > 0 && l.sizes.map((z, i) => <span key={i} className="block text-[11px] text-gray-400">{z.width} × {z.length} = {z.area}</span>)}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
         ))}
       </tbody>
     </table></div>

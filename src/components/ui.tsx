@@ -59,11 +59,12 @@ const tone: Record<string, [string, string]> = {
   'Yetkazib berildi': ['bg-green-100 text-green-800', 'bg-green-500'],
   'Bekor qilindi': ['bg-red-100 text-red-700', 'bg-red-500'],
 };
-export const StatusBadge = ({ s }: { s: string }) => {
+/** `partner`: a saygak order shows 'Topshirildi' instead of 'Yetkazib berildi' (status value is unchanged). */
+export const StatusBadge = ({ s, partner }: { s: string; partner?: boolean }) => {
   const [cls, dot] = tone[s] ?? ['bg-gray-100 text-gray-600', 'bg-gray-400'];
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{s}
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{partner && s === 'Yetkazib berildi' ? 'Topshirildi' : s}
     </span>
   );
 };
