@@ -3,14 +3,13 @@ import { MapPin, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
 import { isPartnerClient, type Address, type Client, type ClientDetail, type Page } from '../types';
-import { Empty, ErrorBox, Field, Loading, Modal, Pager, SaygakBadge, StatusBadge, Tabs } from '../components/ui';
+import { Empty, ErrorBox, Field, Loading, Modal, Pager, SaygakBadge, StatusBadge, Switch, Tabs } from '../components/ui';
 import { PhoneInput } from '../components/fields';
 import LocationPicker, { type LatLng } from '../components/LocationPicker';
 import { formatPhone } from '../format';
 import { CommentBadge, default as Comments, useCommentCounts } from '../components/Comments';
 import OrderModal from './OrderModal';
-import ClientPartnerPanel, { Switch } from './ClientPartnerPanel';
-
+import ClientPartnerPanel from './ClientPartnerPanel';
 
 export default function Clients() {
   const [rows, setRows] = useState<Client[]>([]);
@@ -107,10 +106,11 @@ export function ClientModal({ id, onClose, onChanged }: { id: number; onClose: (
   const changed = () => { load(); onChanged?.(); };
   const manage = can('clients.manage');
   const [toggling, setToggling] = useState(false);
+  const [askPartner, setAskPartner] = useState(false);
   const partner = isPartnerClient(c);
 
   const togglePartner = async (v: boolean) => {
-    setToggling(true); setErr('');
+    setAskPartner(false); setToggling(true); setErr('');
     try { await api(`/clients/${id}`, { method: 'PATCH', body: { isPartner: v } }); changed(); } catch (x) { setErr((x as Error).message); }
     setToggling(false);
   };
@@ -141,8 +141,15 @@ export function ClientModal({ id, onClose, onChanged }: { id: number; onClose: (
           {manage && (
             <label className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-2.5 text-sm">
               <span><b>Saygak</b> <span className="text-gray-500">· o'z narxi, logini va oylik to'lovi bor hamkor</span></span>
-              <Switch label="Saygak" checked={partner} disabled={toggling} onChange={togglePartner} />
+              <Switch label="Saygak" checked={partner} disabled={toggling} onChange={(v) => (v ? setAskPartner(true) : togglePartner(false))} />
             </label>
+          )}
+          {manage && askPartner && !partner && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <span className="flex-1">Bu mijozning keyingi buyurtmalari saygak narxlarida bo'ladi. Davom etasizmi?</span>
+              <button className="btn-primary !h-9 !px-3" disabled={toggling} onClick={() => togglePartner(true)}>Ha, davom etish</button>
+              <button className="btn-ghost !h-9 !px-3" disabled={toggling} onClick={() => setAskPartner(false)}>Yo'q</button>
+            </div>
           )}
           <ErrorBox msg={err} />
           <Tabs value={tab} onChange={setTab} tabs={[{ id: 'info', label: "Ma'lumot" }, { id: 'comments', label: 'Izohlar', badge: commentCount }]} />

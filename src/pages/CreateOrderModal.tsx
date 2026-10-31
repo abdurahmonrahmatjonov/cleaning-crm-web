@@ -148,7 +148,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
             {!noPrices && lines.map((l, i) => (
               <div key={i} className="flex flex-wrap gap-2 sm:flex-nowrap">
                 <div className="basis-full sm:flex-1 sm:basis-0">
-                  <Select placeholder="Xizmat turi…" required value={l.serviceId} options={partner ? (prices ?? []).map((p) => ({ value: String(p.serviceId), label: p.serviceName })) : services.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(v) => {
+                  <Select placeholder="Xizmat turi…" required value={l.serviceId} options={partner ? (prices ?? []).filter((p) => String(p.serviceId) === l.serviceId || !lines.some((x, j) => j !== i && x.serviceId === String(p.serviceId))).map((p) => ({ value: String(p.serviceId), label: p.serviceName })) : services.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(v) => {
                     if (partner) return setLine(i, { serviceId: v });
                     const svc = services.find((s) => String(s.id) === v);
                     setLine(i, { serviceId: v, ...(svc?.defaultPrice ? { price: String(svc.defaultPrice) } : {}) });
@@ -165,7 +165,7 @@ export default function CreateOrderModal({ onClose, onSaved }: { onClose: () => 
               </div>
             ))}
           </div>
-          {!noPrices && <button type="button" onClick={() => setLines((ls) => [...ls, { serviceId: '', price: '' }])} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline">
+          {!noPrices && !(partner && lines.length >= 20) && <button type="button" onClick={() => setLines((ls) => [...ls, { serviceId: '', price: '' }])} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline">
             <Plus size={14} /> Xizmat qo'shish
           </button>}
         </div>

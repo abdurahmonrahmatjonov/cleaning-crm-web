@@ -20,7 +20,6 @@ const TABS = {
 } as const;
 type Tab = keyof typeof TABS;
 
-
 export default function Orders() {
   const { tab } = useParams();
   if (!tab || !(tab in TABS)) return <Navigate to="/sales/received" replace />;
