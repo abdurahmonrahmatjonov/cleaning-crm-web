@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, fmtMoney, todayStr } from '../api';
 import { useAuth } from '../auth';
 import type { Order, Payment } from '../types';
-import { ErrorBox, Field, Loading, Modal, StatusBadge, Tabs } from '../components/ui';
+import { ErrorBox, Field, Loading, Modal, SaygakBadge, StatusBadge, Tabs } from '../components/ui';
 import { NumberInput, PhoneInput } from '../components/fields';
 import { formatNumber, formatPhone } from '../format';
 import OrderHistory from '../components/History';
 import Comments, { useCommentCounts } from '../components/Comments';
+import SizesEditor, { rowsFromLine, rowsPayload, type SizeRow } from '../components/SizesEditor';
 import LocationPicker, { type LatLng } from '../components/LocationPicker';
 
 const toInput = (s: string) => s.slice(0, 16).replace(' ', 'T');
@@ -44,20 +45,22 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
         <div>
           <div className="font-semibold">{order.clientName}</div>
           <div className="text-gray-500">{formatPhone(order.clientPhone)}</div>
-          <div className="mt-1 text-gray-500">{order.landmark}</div>
-          <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
-            href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
+          {order.kind === 'partner' ? <span className="mt-1 inline-block"><SaygakBadge /></span> : <>
+            <div className="mt-1 text-gray-500">{order.landmark}</div>
+            <a className="text-xs font-semibold text-brand-600 hover:underline" target="_blank" rel="noreferrer"
+              href={`https://www.google.com/maps?q=${order.location.latitude},${order.location.longitude}`}>Xaritada ko'rish</a>
+          </>}
         </div>
         <div className="w-full text-left text-xs text-gray-500 sm:w-auto sm:text-right">
-          <StatusBadge s={order.status} />
-          <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>
-          <div>Kiritdi: {order.createdBy.name}</div>
+          <StatusBadge s={order.status} partner={order.kind === 'partner'} />
+          {order.kind !== 'partner' && <div className="mt-2">Olib ketish: {order.pickupTime.slice(0, 16)}</div>}
+          <div className={order.kind === 'partner' ? 'mt-2' : ''}>Kiritdi: {order.createdBy.name}</div>
           {order.waybillNumber && <div>Nakladnoy: {order.waybillNumber}</div>}
           {order.deliveryTime && <div>Yetkazish: {order.deliveryTime.slice(0, 16)}</div>}
           {order.pickedUpBy && <div>Olib ketdi: {order.pickedUpBy}</div>}
           {order.washedBy && <div>Yuvdi: {order.washedBy}</div>}
           {order.packedBy && <div>Upakovka qildi: {order.packedBy}</div>}
-          {order.deliveredBy && <div>Yetkazdi: {order.deliveredBy}</div>}
+          {order.kind !== 'partner' && order.deliveredBy && <div>Yetkazdi: {order.deliveredBy}</div>}
         </div>
       </div>
 
@@ -103,7 +106,7 @@ export default function OrderModal({ docNum, onClose, onChanged }: {
           )}
           {open && canManage && (
             <div className="mt-5 flex gap-2 border-t border-gray-100 pt-4">
-              {order.status === 'Zakaz Qabul qilindi' && <button className="btn-ghost" onClick={() => setMode('edit')}>Tahrirlash</button>}
+              {order.status === 'Zakaz Qabul qilindi' && order.kind !== 'partner' && <button className="btn-ghost" onClick={() => setMode('edit')}>Tahrirlash</button>}
               <button className="btn-ghost !text-red-600" onClick={() => setMode('cancel')}>Bekor qilish</button>
             </div>
           )}
@@ -123,6 +126,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
 }) {
   const start = (l: Order['lines'][number]) => String(path === 'pack' ? l.washedQuantity || l.quantity : l.quantity);
   const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(order.lines.map((l) => [l.id, start(l)])));
+  // Per-carpet sizes for kv.m lines; pack starts from what wash saved.
+  const [sizes, setSizes] = useState<Record<number, SizeRow[]>>(() => Object.fromEntries(order.lines.map((l) => [l.id, rowsFromLine(l)])));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -132,7 +137,11 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
     try {
       onSaved(await api<Order>(`/orders/${order.docNum}/${path}`, {
         method: 'PATCH',
-        body: { lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
+        // Send sizes for a kv.m line only when it has rows or had saved sizes (so clearing still works).
+        body: { lines: order.lines.map((l) => {
+          const rows = rowsPayload(sizes[l.id] ?? []);
+          return { id: l.id, quantity: +qty[l.id], ...(l.unit === 'kv.m' && (rows.length > 0 || l.sizes.length > 0) && { sizes: rows }) };
+        }) },
       }));
     } catch (x) { setErr((x as Error).message); setBusy(false); }
   };
@@ -146,7 +155,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
         {order.lines.map((l) => {
           const differs = path === 'pack' && +qty[l.id] !== l.pickedQuantity;
           return (
-            <div key={l.id} className="flex items-center gap-3">
+            <div key={l.id}>
+            <div className="flex items-center gap-3">
               <span className="flex-1 text-sm font-medium">
                 {l.serviceName}
                 <span className="block text-xs font-normal text-gray-400">
@@ -155,6 +165,8 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
                 </span>
               </span>
               <NumberInput className="!w-28" min={1} value={qty[l.id] ?? ''} onChange={(v) => setQty({ ...qty, [l.id]: v })} required />
+            </div>
+            {l.unit === 'kv.m' && <SizesEditor rows={sizes[l.id] ?? []} onChange={(r) => setSizes({ ...sizes, [l.id]: r })} pieces={+qty[l.id] || 0} />}
             </div>
           );
         })}
@@ -166,6 +178,7 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
 }
 
 function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => void }) {
+  const partner = order.kind === 'partner';
   const [waybill, setWaybill] = useState(order.waybillNumber);
   const [delivery, setDelivery] = useState('');
   const [qty, setQty] = useState<Record<number, string>>({});
@@ -178,7 +191,7 @@ function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => v
     try {
       const o = await api<Order>(`/orders/${order.docNum}/pickup`, {
         method: 'PATCH',
-        body: { waybillNumber: waybill, deliveryTime: delivery, lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
+        body: { ...(waybill.trim() && { waybillNumber: waybill }), ...(delivery && { deliveryTime: delivery }), lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id] })) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -188,14 +201,14 @@ function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => v
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nakladnoy raqami"><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required /></Field>
-        <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required /></Field>
+        <Field label={partner ? 'Nakladnoy raqami (ixtiyoriy)' : 'Nakladnoy raqami'}><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required={!partner} /></Field>
+        {!partner && <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required /></Field>}
       </div>
       <div className="space-y-2">
         <label className="label">Soni (dona)</label>
         {order.lines.map((l) => (
           <div key={l.id} className="flex items-center gap-3">
-            <span className="flex-1 text-sm font-medium">{l.serviceName}</span>
+            <span className="flex-1 text-sm font-medium">{l.serviceName}<Expected l={l} /></span>
             <NumberInput className="!w-32" min={1} value={qty[l.id] ?? ''} onChange={(v) => setQty({ ...qty, [l.id]: v })} required />
           </div>
         ))}
@@ -209,13 +222,16 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
   const [discount, setDiscount] = useState('');
   const [date, setDate] = useState(todayStr());
   const [paid, setPaid] = useState('');
-  const [sqm, setSqm] = useState<Record<number, string>>({});
+  const partner = order.kind === 'partner';
+  // kv.m starts from the saved sizes total; still editable (the client is charged for what is entered).
+  const [sqm, setSqm] = useState<Record<number, string>>(() =>
+    Object.fromEntries(order.lines.filter((l) => l.unit === 'kv.m' && l.sizesTotal > 0).map((l) => [l.id, String(l.sizesTotal)])));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
   const amountOf = (l: Order['lines'][number]) => (l.unit === 'dona' ? l.quantity : +sqm[l.id] || 0);
   const total = order.lines.reduce((s, l) => s + amountOf(l) * l.price, 0);
-  const debt = Math.max(total - (+discount || 0) - (+paid || 0), 0);
+  const debt = partner ? total : Math.max(total - (+discount || 0) - (+paid || 0), 0);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -223,7 +239,7 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
     try {
       const o = await api<Order>(`/orders/${order.docNum}/deliver`, {
         method: 'PATCH',
-        body: { deliveredDate: date, paid: +paid || 0, ...(+discount > 0 && { discount: +discount }), lines: order.lines.map((l) => (l.unit === 'dona' ? { id: l.id } : { id: l.id, sqm: +sqm[l.id] })) },
+        body: { deliveredDate: date, paid: partner ? 0 : +paid || 0, ...(!partner && +discount > 0 && { discount: +discount }), lines: order.lines.map((l) => (l.unit === 'dona' ? { id: l.id } : { id: l.id, sqm: +sqm[l.id] })) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -233,27 +249,30 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Yetkazib berilgan sana"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
-        <Field label="Mijozdan olingan summa"><NumberInput min={0} value={paid} onChange={setPaid} placeholder="0" /></Field>
-        {canDiscount && <Field label="Chegirma (so'm)"><NumberInput min={0} max={Math.round(total)} value={discount} onChange={setDiscount} placeholder="0" /></Field>}
+        <Field label={partner ? 'Topshirilgan sana' : 'Yetkazib berilgan sana'}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
+        {!partner && <Field label="Mijozdan olingan summa"><NumberInput min={0} value={paid} onChange={setPaid} placeholder="0" /></Field>}
+        {!partner && canDiscount && <Field label="Chegirma (so'm)"><NumberInput min={0} max={Math.round(total)} value={discount} onChange={setDiscount} placeholder="0" /></Field>}
       </div>
       <div className="space-y-2">
         <label className="label">O'lchamlar (narx × miqdor)</label>
         {order.lines.map((l) => (
-          <div key={l.id} className="flex items-center gap-3">
+          <div key={l.id} className="flex flex-wrap items-center gap-x-3">
             <span className="flex-1 text-sm font-medium">{l.serviceName} <span className="text-gray-400">· {l.quantity} dona · {fmtMoney(l.price)}/{l.unit}</span></span>
             {l.unit === 'dona'
               ? <span className="w-32 text-right text-sm text-gray-500">{l.quantity} dona</span>
               : <NumberInput decimal className="!w-32" min={0.01} value={sqm[l.id] ?? ''} onChange={(v) => setSqm({ ...sqm, [l.id]: v })} placeholder={l.unit} required />}
+            {l.unit !== 'dona' && l.sizesTotal > 0 && +sqm[l.id] !== l.sizesTotal && (
+              <span className="mt-1 w-full text-xs text-amber-600">o'lchamlardan farq qiladi: {formatNumber(String(l.sizesTotal))} → {formatNumber(sqm[l.id] || '0')}</span>
+            )}
           </div>
         ))}
       </div>
       <div className="space-y-1 rounded-md bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700">
         <div className="flex justify-between"><span>Jami</span><span>{fmtMoney(total)}</span></div>
-        {+discount > 0 && <div className="flex justify-between"><span>Chegirma</span><span>− {fmtMoney(+discount)}</span></div>}
+        {!partner && +discount > 0 && <div className="flex justify-between"><span>Chegirma</span><span>− {fmtMoney(+discount)}</span></div>}
         <div className="flex justify-between"><span>Qarz</span><span>{fmtMoney(debt)}</span></div>
       </div>
-      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Saqlanmoqda…' : 'Yetkazib berildi'}</button>
+      <button className="btn-primary w-full" disabled={busy}>{busy ? 'Saqlanmoqda…' : partner ? 'Topshirildi' : 'Yetkazib berildi'}</button>
     </form>
   );
 }
@@ -283,9 +302,11 @@ function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => 
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Mijoz ismi"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
-        <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
-        <Field label="Orientir"><input className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} /></Field>
+        <>
+          <Field label="Mijoz ismi"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
+          <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
+          <Field label="Orientir"><input className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} /></Field>
+        </>
         <Field label="Olib ketilish vaqti"><input className="input" type="datetime-local" value={pickup} onChange={(e) => setPickup(e.target.value)} required /></Field>
       </div>
       <Field label="Lokatsiya"><LocationPicker value={loc} onChange={setLoc} /></Field>
@@ -358,7 +379,8 @@ function Payments({ order, canPay, canDiscount, onSaved }: { order: Order; canPa
           ))}
         </ul>
       )}
-      {canPay && order.debt > 0 && (
+      {order.kind === 'partner' && order.debt > 0 && <p className="mt-4 text-sm text-gray-500">Saygak to'lovlari mijoz sahifasida (oylik to'lov) qabul qilinadi</p>}
+      {canPay && order.kind !== 'partner' && order.debt > 0 && (
         <form onSubmit={submit} className="mt-4 space-y-3">
           <ErrorBox msg={err} />
           <div className="flex flex-wrap items-end gap-3">
@@ -377,13 +399,18 @@ const Stat = ({ label, v, danger }: { label: string; v: string; danger?: boolean
   <div className="rounded-md bg-gray-50 p-3"><div className="text-xs text-gray-500">{label}</div><div className={`font-bold ${danger ? 'text-red-600' : ''}`}>{v}</div></div>
 );
 
+/** The saygak's own estimate of the count (a hint only; staff count the pieces themselves). */
+function Expected({ l }: { l: Order['lines'][number] }) {
+  return l.expectedQuantity > 0 ? <span className="ml-2 text-xs font-normal text-gray-400">kutilgan: {l.expectedQuantity}</span> : null;
+}
+
 function LinesTable({ order }: { order: Order }) {
   return (
     <div className="sm:overflow-x-auto"><table className="rtable w-full text-sm">
       <thead className="text-left text-xs uppercase text-gray-500"><tr><th className="py-2">Xizmat</th><th>Soni</th><th>O'lcham</th><th className="text-right">Narx</th><th className="text-right">Jami</th></tr></thead>
       <tbody className="divide-y divide-gray-100">
         {order.lines.map((l) => (
-          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}</td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
+          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}<Expected l={l} /></td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}{l.unit === 'kv.m' && l.sizes.length > 0 && l.sizes.map((z, i) => <span key={i} className="block text-[11px] text-gray-400">{z.width} × {z.length} = {z.area}</span>)}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
         ))}
       </tbody>
     </table></div>

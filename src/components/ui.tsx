@@ -59,11 +59,13 @@ const tone: Record<string, [string, string]> = {
   'Yetkazib berildi': ['bg-green-100 text-green-800', 'bg-green-500'],
   'Bekor qilindi': ['bg-red-100 text-red-700', 'bg-red-500'],
 };
-export const StatusBadge = ({ s }: { s: string }) => {
+export const SaygakBadge = () => <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Saygak</span>;
+/** `partner`: a saygak order shows 'Topshirildi' instead of 'Yetkazib berildi' (status value is unchanged). */
+export const StatusBadge = ({ s, partner }: { s: string; partner?: boolean }) => {
   const [cls, dot] = tone[s] ?? ['bg-gray-100 text-gray-600', 'bg-gray-400'];
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{s}
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{partner && s === 'Yetkazib berildi' ? 'Topshirildi' : s}
     </span>
   );
 };
@@ -100,5 +102,15 @@ export function Loading() {
       ))}
       {slow && <p className="text-center text-xs text-gray-400">Server uyg'onmoqda, biroz kuting…</p>}
     </div>
+  );
+}
+
+/** Accessible on/off switch. */
+export function Switch({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-brand-600' : 'bg-gray-300'}`}>
+      <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : ''}`} />
+    </button>
   );
 }

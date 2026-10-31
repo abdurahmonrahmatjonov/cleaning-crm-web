@@ -4,7 +4,7 @@ import { MapPin, Plus, Search } from 'lucide-react';
 import { api, fmtMoney } from '../api';
 import { useAuth } from '../auth';
 import type { Order, Page } from '../types';
-import { Empty, Loading, Pager, StatusBadge } from '../components/ui';
+import { Empty, Loading, Pager, SaygakBadge, StatusBadge } from '../components/ui';
 import { formatPhone } from '../format';
 import { CommentBadge, useCommentCounts } from '../components/Comments';
 import CreateOrderModal from './CreateOrderModal';
@@ -75,15 +75,15 @@ function OrderList({ tab }: { tab: Tab }) {
               <li key={o.docNum} onClick={() => setSelected(o.docNum)} className="cursor-pointer px-4 py-3.5 transition-colors active:bg-gray-50">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display text-base font-bold text-brand-600">#{o.docNum}</span>
-                  <StatusBadge s={o.status} />
+                  <span className="flex items-center gap-1.5">{o.kind === 'partner' && <SaygakBadge />}<StatusBadge s={o.status} partner={o.kind === 'partner'} /></span>
                 </div>
                 <div className="mt-1.5 flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-semibold">{o.clientName}<CommentBadge n={counts[o.docNum]} /></span>
                   <span className="shrink-0 text-xs text-gray-500">{formatPhone(o.clientPhone)}</span>
                 </div>
-                {o.landmark && <div className="mt-1 flex items-start gap-1.5 text-sm text-gray-600"><MapPin size={14} className="mt-0.5 shrink-0 text-gray-400" /><span className="min-w-0">{o.landmark}</span></div>}
+                {o.kind !== 'partner' && o.landmark && <div className="mt-1 flex items-start gap-1.5 text-sm text-gray-600"><MapPin size={14} className="mt-0.5 shrink-0 text-gray-400" /><span className="min-w-0">{o.landmark}</span></div>}
                 <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-gray-500">
-                  <span className="shrink-0 tabular-nums">{o.pickupTime.slice(0, 16)}</span>
+                  {o.kind !== 'partner' ? <span className="shrink-0 tabular-nums">{o.pickupTime.slice(0, 16)}</span> : <span />}
                   <span className="min-w-0 truncate">{o.lines.map((l) => l.serviceName).join(', ')}</span>
                 </div>
                 {tab === 'completed' && (
@@ -109,15 +109,15 @@ function OrderList({ tab }: { tab: Tab }) {
                 {rows.map((o) => (
                   <tr key={o.docNum} onClick={() => setSelected(o.docNum)} className="cursor-pointer hover:bg-gray-50">
                     <td data-label="№" className="td font-semibold text-brand-600">{o.docNum}</td>
-                    <td data-label="Mijoz" className="td"><div><div className="font-medium">{o.clientName}<CommentBadge n={counts[o.docNum]} /></div><div className="text-xs text-gray-500">{formatPhone(o.clientPhone)}</div></div></td>
-                    <td data-label="Orientir" className="td text-gray-600">{o.landmark || '—'}</td>
-                    <td data-label="Olib ketish" className="td whitespace-nowrap text-gray-600">{o.pickupTime.slice(0, 16)}</td>
+                    <td data-label="Mijoz" className="td"><div><div className="font-medium">{o.clientName}{o.kind === 'partner' && <> <SaygakBadge /></>}<CommentBadge n={counts[o.docNum]} /></div><div className="text-xs text-gray-500">{formatPhone(o.clientPhone)}</div></div></td>
+                    <td data-label="Orientir" className="td text-gray-600">{o.kind === 'partner' ? '—' : o.landmark || '—'}</td>
+                    <td data-label="Olib ketish" className="td whitespace-nowrap text-gray-600">{o.kind === 'partner' ? '—' : o.pickupTime.slice(0, 16)}</td>
                     <td data-label="Xizmatlar" className="td text-gray-600">{o.lines.map((l) => l.serviceName).join(', ')}</td>
                     {tab === 'completed' && <>
                       <td data-label="Jami" className="td text-right font-medium">{fmtMoney(o.docTotal)}</td>
                       <td data-label="Qarz" className={`td text-right ${o.debt > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`}>{o.debt > 0 ? fmtMoney(o.debt) : '—'}</td>
                     </>}
-                    <td data-label="Status" className="td"><StatusBadge s={o.status} /></td>
+                    <td data-label="Status" className="td"><StatusBadge s={o.status} partner={o.kind === 'partner'} /></td>
                   </tr>
                 ))}
               </tbody>

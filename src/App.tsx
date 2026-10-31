@@ -1,9 +1,11 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import { Loading } from './components/ui';
 
+const PartnerApp = lazy(() => import('./pages/partner/PartnerApp'));
 const Orders = lazy(() => import('./pages/Orders'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const Clients = lazy(() => import('./pages/Clients'));
@@ -20,6 +22,7 @@ export default function App() {
   const { user, loading, can, isAdmin } = useAuth();
   if (loading) return <div className="grid h-screen place-items-center text-gray-400">Yuklanmoqda…</div>;
   if (!user) return <Login />;
+  if (user.clientId != null) return <Suspense fallback={<Loading />}><PartnerApp /></Suspense>;
   return (
     <Routes>
       <Route element={<Layout />}>
