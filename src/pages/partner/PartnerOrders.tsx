@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import { Empty, ErrorBox, Loading, Pager, StatusBadge } from '../../components/ui';
 import type { Page, PartnerOrder } from '../../types';
@@ -7,7 +7,10 @@ import PartnerOrderDetail from './PartnerOrderDetail';
 import { money } from './util';
 
 export default function PartnerOrders({ onChanged }: { onChanged: () => void }) {
-  const created = (useLocation().state as { created?: number } | null)?.created;
+  const loc = useLocation();
+  const nav = useNavigate();
+  const [created] = useState(() => (loc.state as { created?: number } | null)?.created);
+  useEffect(() => { if (created != null) nav('.', { replace: true, state: null }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<PartnerOrder[] | null>(null);
   const [meta, setMeta] = useState({ page: 1, limit: 20, total: 0 });

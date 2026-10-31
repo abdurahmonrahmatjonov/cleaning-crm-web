@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { ErrorBox, Loading, Modal, StatusBadge } from '../../components/ui';
 import type { PartnerOrder } from '../../types';
@@ -14,25 +14,36 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
 
-  const load = (alive: () => boolean = () => true) =>
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+
+  const apply = (r: PartnerOrder) => { setO(r); setExp(Object.fromEntries(r.lines.map((l) => [l.id, String(l.expectedQuantity || '')]))); };
+  const load = (alive: () => boolean = () => mounted.current) =>
     api<PartnerOrder>(`/partner/orders/${docNum}`)
-      .then((r) => { if (!alive()) return; setO(r); setExp(Object.fromEntries(r.lines.map((l) => [l.id, String(l.expectedQuantity || '')]))); })
+      .then((r) => { if (alive()) apply(r); })
       .catch((e) => { if (alive()) setErr((e as Error).message); });
-  useEffect(() => { let a = true; load(() => a); return () => { a = false; }; }, [docNum]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { let a = true; load(() => a && mounted.current); return () => { a = false; }; }, [docNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
     if (!o) return;
     const lines = o.lines.map((l) => ({ id: l.id, expectedQuantity: Math.max(0, Math.floor(Number(exp[l.id] || 0))) }));
     if (lines.some((l) => !Number.isFinite(l.expectedQuantity) || l.expectedQuantity > 100000)) { setErr("Soni noto'g'ri"); return; }
     setBusy(true); setErr('');
-    try { setO(await api<PartnerOrder>(`/partner/orders/${docNum}`, { method: 'PATCH', body: { lines } })); onChanged(); await load(); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try {
+      const r = await api<PartnerOrder>(`/partner/orders/${docNum}`, { method: 'PATCH', body: { lines } });
+      if (mounted.current) apply(r);
+      onChanged();
+    } catch (e) {
+      if (mounted.current) { setErr((e as Error).message); await load(); }
+    } finally { if (mounted.current) setBusy(false); }
   };
   const cancel = async () => {
     if (!reason.trim()) { setErr('Bekor qilish sababini yozing'); return; }
     setBusy(true); setErr('');
     try { await api(`/partner/orders/${docNum}/cancel`, { method: 'POST', body: { reason: reason.trim() } }); onChanged(); onClose(); }
-    catch (e) { setErr((e as Error).message); setBusy(false); }
+    catch (e) {
+      if (mounted.current) { setErr((e as Error).message); setCancelling(false); await load(); setBusy(false); }
+    }
   };
 
   const open = o?.status === OPEN;
@@ -97,7 +108,8 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
             {open && cancelling && (
               <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
                 <label className="label" htmlFor="cancel-reason">Bekor qilish sababi</label>
-                <textarea id="cancel-reason" className="input" rows={2} maxLength={500} value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)} />
+                <textarea id="cancel-reason" className="input" rows={2} maxLength={300} value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)} />
+                <div className="text-right text-xs text-gray-500">{300 - reason.length} ta belgi qoldi</div>
                 <div className="flex gap-2">
                   <button className="btn-primary flex-1 !bg-red-600" disabled={busy || !reason.trim()} onClick={cancel}>{busy ? 'Yuborilmoqda…' : 'Ha, bekor qilish'}</button>
                   <button className="btn-ghost flex-1" disabled={busy} onClick={() => setCancelling(false)}>Orqaga</button>

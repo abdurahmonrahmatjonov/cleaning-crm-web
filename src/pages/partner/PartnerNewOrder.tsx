@@ -10,17 +10,22 @@ export default function PartnerNewOrder({ me, onCreated }: { me: PartnerMe | nul
   const [services, setServices] = useState<PartnerService[] | null>(null);
   const [sel, setSel] = useState<Record<number, string>>({});
   const [err, setErr] = useState('');
+  const [failed, setFailed] = useState(false);
+  const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    setFailed(false);
     api<PartnerService[]>('/partner/services')
       .then((r) => { if (alive) setServices(r); })
-      .catch((e) => { if (alive) { setErr((e as Error).message); setServices([]); } });
+      .catch((e) => { if (alive) { setErr((e as Error).message); setFailed(true); setServices([]); } });
     return () => { alive = false; };
-  }, []);
+  }, [tick]);
 
   const ids = Object.keys(sel).map(Number);
+  const isBad = (v: string) => { if (v === '') return false; const n = Number(v); return !Number.isInteger(n) || n < 1 || n > 100000; };
+  const badIds = ids.filter((id) => isBad(sel[id]));
   const full = !!me && me.receivedOrders >= me.orderCap;
   const toggle = (id: number) => setSel((s) => {
     const n = { ...s };
@@ -29,11 +34,9 @@ export default function PartnerNewOrder({ me, onCreated }: { me: PartnerMe | nul
   });
 
   const submit = async () => {
-    const lines = ids.map((serviceId) => {
-      const q = Math.floor(Number(sel[serviceId]));
-      return sel[serviceId] !== '' && q > 0 ? { serviceId, expectedQuantity: q } : { serviceId };
-    });
-    if (lines.some((l) => 'expectedQuantity' in l && (l.expectedQuantity as number) > 100000)) { setErr("Soni noto'g'ri"); return; }
+    if (badIds.length) { setErr("Soni butun, 1 dan 100000 gacha bo'lishi kerak"); return; }
+    const lines: { serviceId: number; expectedQuantity?: number }[] = ids.map((serviceId) =>
+      sel[serviceId] === '' ? { serviceId } : { serviceId, expectedQuantity: Number(sel[serviceId]) });
     setBusy(true); setErr('');
     try {
       const o = await api<PartnerOrder>('/partner/orders', { method: 'POST', body: { lines } });
@@ -47,7 +50,9 @@ export default function PartnerNewOrder({ me, onCreated }: { me: PartnerMe | nul
     <div className="space-y-3">
       <ErrorBox msg={err} />
       {full && <ErrorBox msg={`Ochiq buyurtmalar limiti: ${me!.orderCap}. Yangi buyurtma berish uchun avvalgilari qabul qilinishini kuting.`} />}
-      {services.length === 0 ? (
+      {failed ? (
+        <button className="btn-ghost w-full" onClick={() => { setErr(''); setServices(null); setTick((t) => t + 1); }}>Qayta urinish</button>
+      ) : services.length === 0 ? (
         <div className="card"><Empty text="Narxlar belgilanmagan, administratorga murojaat qiling" /></div>
       ) : (
         <div className="card divide-y divide-gray-100">
@@ -67,13 +72,15 @@ export default function PartnerNewOrder({ me, onCreated }: { me: PartnerMe | nul
                     aria-label={`${s.name}: taxminiy soni`} placeholder="Soni" value={sel[s.id]} disabled={busy}
                     onChange={(e) => setSel({ ...sel, [s.id]: e.target.value })} />
                 )}
+                {on && isBad(sel[s.id]) && <span className="text-xs text-red-600" role="alert">Butun son kiriting</span>}
               </div>
             );
           })}
         </div>
       )}
+      {ids.length > 20 && <p className="text-center text-xs text-red-600">Bir buyurtmada ko'pi bilan 20 ta xizmat</p>}
       {services.length > 0 && (
-        <button className="btn-primary w-full !h-12" disabled={busy || ids.length === 0 || full || ids.length > 20} onClick={submit}>
+        <button className="btn-primary w-full !h-12" disabled={busy || ids.length === 0 || full || ids.length > 20 || badIds.length > 0} onClick={submit}>
           {busy ? 'Yuborilmoqda…' : `Buyurtma berish${ids.length ? ` (${ids.length})` : ''}`}
         </button>
       )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ClipboardList, FileText, LogOut, PlusCircle } from 'lucide-react';
 import { api } from '../../api';
 import { useAuth } from '../../auth';
@@ -23,11 +23,13 @@ export default function PartnerApp() {
   const [me, setMe] = useState<PartnerMe | null>(null);
   const [tick, setTick] = useState(0);
 
+  const { pathname } = useLocation();
+
   useEffect(() => {
     let alive = true;
     api<PartnerMe>('/partner/me').then((r) => { if (alive) setMe(r); }).catch(() => {});
     return () => { alive = false; };
-  }, [tick]);
+  }, [tick, pathname === '/new']);
   const refresh = () => setTick((t) => t + 1);
 
   const link = ({ isActive }: { isActive: boolean }) =>
