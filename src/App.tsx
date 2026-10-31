@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import PartnerApp from './pages/partner/PartnerApp';
 
 const Orders = lazy(() => import('./pages/Orders'));
 const Expenses = lazy(() => import('./pages/Expenses'));
@@ -20,6 +21,7 @@ export default function App() {
   const { user, loading, can, isAdmin } = useAuth();
   if (loading) return <div className="grid h-screen place-items-center text-gray-400">Yuklanmoqda…</div>;
   if (!user) return <Login />;
+  if (user.clientId != null) return <PartnerApp />;
   return (
     <Routes>
       <Route element={<Layout />}>
