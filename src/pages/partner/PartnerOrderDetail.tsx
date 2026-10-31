@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { ErrorBox, Loading, Modal, StatusBadge } from '../../components/ui';
 import type { PartnerOrder } from '../../types';
-import { money, num } from './util';
+import { num } from './util';
+import { fmtMoneyExact as money } from '../../format';
 
 const OPEN = 'Zakaz Qabul qilindi';
 
@@ -24,10 +25,11 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
       .catch((e) => { if (alive()) setErr((e as Error).message); });
   useEffect(() => { let a = true; load(() => a && mounted.current); return () => { a = false; }; }, [docNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isBad = (v: string) => { if (v === '') return false; const n = Number(v); return !Number.isInteger(n) || n < 0 || n > 100000; };
   const save = async () => {
     if (!o) return;
-    const lines = o.lines.map((l) => ({ id: l.id, expectedQuantity: Math.max(0, Math.floor(Number(exp[l.id] || 0))) }));
-    if (lines.some((l) => !Number.isFinite(l.expectedQuantity) || l.expectedQuantity > 100000)) { setErr("Soni noto'g'ri"); return; }
+    if (o.lines.some((l) => isBad(exp[l.id] ?? ''))) { setErr("Soni butun, 0 dan 100000 gacha bo'lishi kerak"); return; }
+    const lines = o.lines.map((l) => ({ id: l.id, expectedQuantity: Number(exp[l.id] || 0) }));
     setBusy(true); setErr('');
     try {
       const r = await api<PartnerOrder>(`/partner/orders/${docNum}`, { method: 'PATCH', body: { lines } });
@@ -59,6 +61,7 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
               <StatusBadge s={o.status} partner />
               <span>Sana: {o.createdAt}</span>
               {o.deliveredDate && <span>Topshirilgan: {o.deliveredDate}</span>}
+              {o.cancelledAt && <span>Bekor qilingan: {o.cancelledAt}</span>}
             </div>
             <div className="space-y-3">
               {o.lines.map((l) => (
@@ -71,6 +74,7 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
                         onChange={(e) => setExp({ ...exp, [l.id]: e.target.value })} />
                     )}
                   </div>
+                  {open && isBad(exp[l.id] ?? '') && <div className="mt-1 text-right text-xs text-red-600" role="alert">Butun son kiriting</div>}
                   <div className="mt-1 text-gray-500">
                     {!open && <>Taxminiy soni: {l.expectedQuantity || '—'}. </>}
                     {l.quantity != null && <>Soni: <b>{l.quantity}</b></>}
@@ -84,7 +88,7 @@ export default function PartnerOrderDetail({ docNum, onClose, onChanged }: { doc
                   {handed && l.lineTotal != null && (
                     <div className="mt-2 flex flex-wrap gap-x-4 border-t border-gray-100 pt-2 text-gray-700">
                       <span>Narx: {money(l.price)}</span>
-                      {l.unit === 'kv.m' && <span>{num(l.sqm ?? 0)} kv.m</span>}
+                      {l.unit !== 'dona' && <span>{num(l.sqm ?? 0)} {l.unit}</span>}
                       <span className="font-semibold">{money(l.lineTotal)}</span>
                     </div>
                   )}

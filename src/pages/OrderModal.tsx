@@ -137,8 +137,11 @@ function Step({ order, allowed, path, label, hint, onSaved }: {
     try {
       onSaved(await api<Order>(`/orders/${order.docNum}/${path}`, {
         method: 'PATCH',
-        // Always send sizes for kv.m lines so editing and clearing both work.
-        body: { lines: order.lines.map((l) => ({ id: l.id, quantity: +qty[l.id], ...(l.unit === 'kv.m' && { sizes: rowsPayload(sizes[l.id] ?? []) }) })) },
+        // Send sizes for a kv.m line only when it has rows or had saved sizes (so clearing still works).
+        body: { lines: order.lines.map((l) => {
+          const rows = rowsPayload(sizes[l.id] ?? []);
+          return { id: l.id, quantity: +qty[l.id], ...(l.unit === 'kv.m' && (rows.length > 0 || l.sizes.length > 0) && { sizes: rows }) };
+        }) },
       }));
     } catch (x) { setErr((x as Error).message); setBusy(false); }
   };
@@ -198,14 +201,14 @@ function PickupForm({ order, onSaved }: { order: Order; onSaved: (o: Order) => v
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nakladnoy raqami"><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required={!partner} /></Field>
-        <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required={!partner} /></Field>
+        <Field label={partner ? 'Nakladnoy raqami (ixtiyoriy)' : 'Nakladnoy raqami'}><input className="input" value={waybill} onChange={(e) => setWaybill(e.target.value)} required={!partner} /></Field>
+        {!partner && <Field label="Yetkazilish vaqti"><input className="input" type="datetime-local" value={delivery} onChange={(e) => setDelivery(e.target.value)} required /></Field>}
       </div>
       <div className="space-y-2">
         <label className="label">Soni (dona)</label>
         {order.lines.map((l) => (
           <div key={l.id} className="flex items-center gap-3">
-            <span className="flex-1 text-sm font-medium">{l.serviceName}</span>
+            <span className="flex-1 text-sm font-medium">{l.serviceName}<Expected l={l} /></span>
             <NumberInput className="!w-32" min={1} value={qty[l.id] ?? ''} onChange={(v) => setQty({ ...qty, [l.id]: v })} required />
           </div>
         ))}
@@ -275,7 +278,6 @@ function DeliverForm({ order, canDiscount, onSaved }: { order: Order; canDiscoun
 }
 
 function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => void; onSaved: (o: Order) => void }) {
-  const partner = order.kind === 'partner';
   const [name, setName] = useState(order.clientName);
   const [phone, setPhone] = useState(order.clientPhone);
   const [landmark, setLandmark] = useState(order.landmark);
@@ -290,7 +292,7 @@ function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => 
     try {
       const o = await api<Order>(`/orders/${order.docNum}`, {
         method: 'PATCH',
-        body: partner ? { pickupTime: pickup } : { clientName: name, clientPhone: phone, landmark, pickupTime: pickup, ...(loc && { location: loc }) },
+        body: { clientName: name, clientPhone: phone, landmark, pickupTime: pickup, ...(loc && { location: loc }) },
       });
       onSaved(o);
     } catch (x) { setErr((x as Error).message); setBusy(false); }
@@ -300,14 +302,14 @@ function EditForm({ order, onCancel, onSaved }: { order: Order; onCancel: () => 
     <form onSubmit={submit} className="space-y-4">
       <ErrorBox msg={err} />
       <div className="grid gap-4 sm:grid-cols-2">
-        {!partner && <>
+        <>
           <Field label="Mijoz ismi"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required /></Field>
           <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
           <Field label="Orientir"><input className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} /></Field>
-        </>}
+        </>
         <Field label="Olib ketilish vaqti"><input className="input" type="datetime-local" value={pickup} onChange={(e) => setPickup(e.target.value)} required /></Field>
       </div>
-      {!partner && <Field label="Lokatsiya"><LocationPicker value={loc} onChange={setLoc} /></Field>}
+      <Field label="Lokatsiya"><LocationPicker value={loc} onChange={setLoc} /></Field>
       <div className="flex gap-2">
         <button type="button" className="btn-ghost" onClick={onCancel}>Ortga</button>
         <button className="btn-primary flex-1" disabled={busy}>{busy ? 'Saqlanmoqda…' : 'Saqlash'}</button>
@@ -377,7 +379,8 @@ function Payments({ order, canPay, canDiscount, onSaved }: { order: Order; canPa
           ))}
         </ul>
       )}
-      {canPay && order.debt > 0 && (
+      {order.kind === 'partner' && order.debt > 0 && <p className="mt-4 text-sm text-gray-500">Saygak to'lovlari mijoz sahifasida (oylik to'lov) qabul qilinadi</p>}
+      {canPay && order.kind !== 'partner' && order.debt > 0 && (
         <form onSubmit={submit} className="mt-4 space-y-3">
           <ErrorBox msg={err} />
           <div className="flex flex-wrap items-end gap-3">
@@ -396,13 +399,18 @@ const Stat = ({ label, v, danger }: { label: string; v: string; danger?: boolean
   <div className="rounded-md bg-gray-50 p-3"><div className="text-xs text-gray-500">{label}</div><div className={`font-bold ${danger ? 'text-red-600' : ''}`}>{v}</div></div>
 );
 
+/** The saygak's own estimate of the count (a hint only; staff count the pieces themselves). */
+function Expected({ l }: { l: Order['lines'][number] }) {
+  return l.expectedQuantity > 0 ? <span className="ml-2 text-xs font-normal text-gray-400">kutilgan: {l.expectedQuantity}</span> : null;
+}
+
 function LinesTable({ order }: { order: Order }) {
   return (
     <div className="sm:overflow-x-auto"><table className="rtable w-full text-sm">
       <thead className="text-left text-xs uppercase text-gray-500"><tr><th className="py-2">Xizmat</th><th>Soni</th><th>O'lcham</th><th className="text-right">Narx</th><th className="text-right">Jami</th></tr></thead>
       <tbody className="divide-y divide-gray-100">
         {order.lines.map((l) => (
-          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}</td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}{l.unit === 'kv.m' && l.sizes.length > 0 && l.sizes.map((z, i) => <span key={i} className="block text-[11px] text-gray-400">{z.width} × {z.length} = {z.area}</span>)}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
+          <tr key={l.id}><td data-label="Xizmat" className="py-2.5 font-medium">{l.serviceName}<Expected l={l} /></td><td data-label="Soni">{l.quantity || '—'}{(l.pickedQuantity && l.pickedQuantity !== l.quantity) || (l.washedQuantity && l.washedQuantity !== l.quantity) ? <span className="block text-[11px] text-gray-400">olingan {l.pickedQuantity || '—'} · yuvilgan {l.washedQuantity || '—'}</span> : null}</td><td data-label="O'lcham">{l.unit === 'dona' ? '—' : l.sqm ? `${l.sqm} ${l.unit}` : '—'}{l.unit === 'kv.m' && l.sizes.length > 0 && l.sizes.map((z, i) => <span key={i} className="block text-[11px] text-gray-400">{z.width} × {z.length} = {z.area}</span>)}</td><td data-label="Narx" className="text-right">{fmtMoney(l.price)}/{l.unit}</td><td data-label="Jami" className="text-right font-semibold">{fmtMoney(l.lineTotal)}</td></tr>
         ))}
       </tbody>
     </table></div>

@@ -36,3 +36,13 @@ export function parseNumber(text: string, decimal: boolean): string {
   if (i !== -1) t = t.slice(0, i + 1) + t.slice(i + 1).replace(/\./g, '').slice(0, 2);
   return t.replace(/^0+(?=\d)/, '');
 }
+
+/** Round to tiyin (2 decimals), same as the backend. */
+export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** Saygak money: whole so'm, or 2 decimals (tiyin) when the amount is fractional. */
+export const fmtMoneyExact = (n: number | undefined | null): string => {
+  const v = round2(Number(n ?? 0));
+  const frac = !Number.isInteger(v);
+  return new Intl.NumberFormat('ru-RU', frac ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 }).format(v) + " so'm";
+};

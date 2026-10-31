@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, fmtMoney, todayStr } from '../api';
+import { api, todayStr } from '../api';
 import { useAuth } from '../auth';
 import type { PaymentBatch, Statement } from '../types';
-import { Empty, ErrorBox, Field, Loading } from '../components/ui';
+import { Empty, ErrorBox, Field, Loading, StatusBadge } from '../components/ui';
 import { NumberInput } from '../components/fields';
+import { fmtMoneyExact as fmtMoney, round2 } from '../format';
 
 const card = 'rounded-xl border border-gray-200 p-3';
 const month = () => todayStr().slice(0, 7);
-const round2 = (n: number) => Math.round(n * 100) / 100;
-/** Money with tiyin shown only when the amount has a fractional part. */
-const fmtMoney2 = (n: number) => {
-  const x = round2(n);
-  return Number.isInteger(x) ? fmtMoney(x) : new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x) + " so'm";
-};
 /** Plain numeric string for an input: at most 2 decimals, no trailing zeros. */
 const plain2 = (n: number) => round2(n).toFixed(2).replace(/\.?0+$/, '');
 
@@ -66,7 +61,7 @@ function PayCard({ clientId, v, onPaid }: { clientId: number; v: number; onPaid:
     <form onSubmit={submit} className={card}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Oylik to'lov qabul qilish</h3>
-        <span className="text-sm">Saygak qarzi: <b className={debt ? 'text-red-600' : ''}>{debt === null ? '…' : fmtMoney2(debt)}</b></span>
+        <span className="text-sm">Saygak qarzi: <b className={debt ? 'text-red-600' : ''}>{debt === null ? '…' : fmtMoney(debt)}</b></span>
       </div>
       <ErrorBox msg={err} />
       {!allowed && <div className="text-sm text-gray-500">To'lov qabul qilish uchun ruxsat yo'q</div>}
@@ -202,7 +197,7 @@ function StatementCard({ clientId, v }: { clientId: number; v: number }) {
           {s.inProgress.length > 0 && (
             <div>
               <div className="mb-1 text-xs font-semibold uppercase text-gray-500">Jarayonda</div>
-              <ul className="text-sm">{s.inProgress.map((o) => <li key={o.docNum} className="flex justify-between py-1"><b>№{o.docNum}</b><span className="text-gray-500">{o.status}</span></li>)}</ul>
+              <ul className="text-sm">{s.inProgress.map((o) => <li key={o.docNum} className="flex justify-between py-1"><b>№{o.docNum}</b><StatusBadge s={o.status} partner /></li>)}</ul>
             </div>
           )}
         </div>

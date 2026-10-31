@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api, todayStr } from '../../api';
 import { Empty, ErrorBox, Loading, StatusBadge } from '../../components/ui';
 import type { Statement } from '../../types';
-import { money, num } from './util';
+import { num } from './util';
+import { fmtMoneyExact as money } from '../../format';
 
 const Card = ({ label, value, tone }: { label: string; value: string; tone?: string }) => (
   <div className="card px-4 py-3"><div className="text-xs text-gray-500">{label}</div><div className={`mt-0.5 text-base font-bold tabular-nums ${tone ?? ''}`}>{value}</div></div>

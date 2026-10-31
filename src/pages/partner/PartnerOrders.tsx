@@ -4,7 +4,7 @@ import { api } from '../../api';
 import { Empty, ErrorBox, Loading, Pager, StatusBadge } from '../../components/ui';
 import type { Page, PartnerOrder } from '../../types';
 import PartnerOrderDetail from './PartnerOrderDetail';
-import { money } from './util';
+import { fmtMoneyExact as money } from '../../format';
 
 export default function PartnerOrders({ onChanged }: { onChanged: () => void }) {
   const loc = useLocation();

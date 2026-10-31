@@ -1,21 +1,18 @@
 import { Plus, X } from 'lucide-react';
 import type { Line } from '../types';
 import { NumberInput } from './fields';
-import { formatNumber } from '../format';
+import { formatNumber, round2 } from '../format';
 
 export interface SizeRow { width: string; length: string }
 
-/** Same rounding as the backend: 2 decimals, per value and per row. */
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
 export const rowsFromLine = (l: Line): SizeRow[] => l.sizes.map((s) => ({ width: String(s.width), length: String(s.length) }));
 
-export const rowArea = (r: SizeRow): number => {
+const rowArea = (r: SizeRow): number => {
   const w = round2(+r.width), l = round2(+r.length);
   return w > 0 && l > 0 ? round2(w * l) : 0;
 };
 
-export const rowsTotal = (rows: SizeRow[]): number => round2(rows.reduce((s, r) => s + rowArea(r), 0));
+const rowsTotal = (rows: SizeRow[]): number => round2(rows.reduce((s, r) => s + rowArea(r), 0));
 
 /** Complete rows only (both values positive), as numbers for the API. */
 export const rowsPayload = (rows: SizeRow[]): { width: number; length: number }[] =>

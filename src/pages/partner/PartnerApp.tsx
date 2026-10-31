@@ -9,7 +9,7 @@ import type { PartnerMe } from '../../types';
 import PartnerOrders from './PartnerOrders';
 import PartnerNewOrder from './PartnerNewOrder';
 import PartnerStatement from './PartnerStatement';
-import { money } from './util';
+import { fmtMoneyExact as money } from '../../format';
 
 const tabs = [
   { to: '/', label: 'Buyurtmalar', icon: ClipboardList, end: true },

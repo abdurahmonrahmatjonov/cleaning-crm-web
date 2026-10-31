@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api';
 import { Empty, ErrorBox, Loading } from '../../components/ui';
 import type { PartnerMe, PartnerOrder, PartnerService } from '../../types';
-import { money } from './util';
+import { fmtMoneyExact as money } from '../../format';
 
 export default function PartnerNewOrder({ me, onCreated }: { me: PartnerMe | null; onCreated: () => void }) {
   const nav = useNavigate();
