@@ -217,18 +217,35 @@ function ClientForm({ client, onClose, onSaved }: { client?: ClientDetail; onClo
   const [withAddress, setWithAddress] = useState(false);
   const [loc, setLoc] = useState<LatLng | null>(null);
   const [landmark, setLandmark] = useState('');
+  const [partner, setPartner] = useState(false);
+  // set once the client exists, so a retry after a failed "saygak" step doesn't create it twice
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (withAddress && !loc) return setErr('Manzil uchun xaritadan joyni tanlang yoki manzilni olib tashlang');
+    if (withAddress && !partner && !loc) return setErr('Manzil uchun xaritadan joyni tanlang yoki manzilni olib tashlang');
     setBusy(true); setErr('');
+    let exists = createdId != null;
     try {
-      const r = client
-        ? await api<{ id: number }>(`/clients/${client.id}`, { method: 'PATCH', body: { name, phone } })
-        : await api<{ id: number }>('/clients', { method: 'POST', body: { name, phone, ...(withAddress && loc && { address: { ...loc, landmark } }) } });
-      onSaved(r.id);
-    } catch (x) { setErr((x as Error).message); setBusy(false); }
+      if (client) {
+        const r = await api<{ id: number }>(`/clients/${client.id}`, { method: 'PATCH', body: { name, phone } });
+        return onSaved(r.id);
+      }
+      let id = createdId;
+      if (id == null) {
+        // a saygak has no address, so it is never sent for one
+        const r = await api<{ id: number }>('/clients', { method: 'POST', body: { name, phone, ...(withAddress && !partner && loc && { address: { ...loc, landmark } }) } });
+        id = r.id;
+        exists = true;
+        setCreatedId(id);
+      }
+      if (partner) await api(`/clients/${id}`, { method: 'PATCH', body: { isPartner: true } });
+      onSaved(id);
+    } catch (x) {
+      setErr(exists ? `Mijoz qo'shildi, lekin saygak qilib belgilanmadi: ${(x as Error).message}` : (x as Error).message);
+      setBusy(false);
+    }
   };
   return (
     <Modal title={client ? 'Mijozni tahrirlash' : "Yangi mijoz"} onClose={onClose} wide={!client && withAddress}>
@@ -237,7 +254,16 @@ function ClientForm({ client, onClose, onSaved }: { client?: ClientDetail; onClo
         <Field label="Ism"><input className="input" value={name} onChange={(e) => setName(e.target.value)} required autoFocus /></Field>
         <Field label="Telefon"><PhoneInput value={phone} onChange={setPhone} required /></Field>
         {client && <p className="text-xs text-gray-500">Ism va telefon shu mijozning barcha zakazlarida ham yangilanadi.</p>}
-        {!client && (withAddress ? (
+        {!client && (
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+            <span>
+              <span className="block text-sm font-semibold">Saygak</span>
+              <span className="block text-xs text-gray-500">Alohida narxlar, oyiga bir marta hisob-kitob. Manzil kerak emas.</span>
+            </span>
+            <Switch label="Saygak" checked={partner} onChange={(v) => { setPartner(v); if (v) { setWithAddress(false); setLoc(null); setLandmark(''); } }} />
+          </label>
+        )}
+        {!client && !partner && (withAddress ? (
           <div className="space-y-3 rounded-xl border border-gray-200 p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">Manzil</span>
